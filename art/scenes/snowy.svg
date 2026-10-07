@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#DDE6F0"/><stop offset="45%" stop-color="#EEF1F4"/><stop offset="100%" stop-color="#F6F3EE"/></linearGradient>
+  </defs>
+  <rect width="390" height="844" fill="url(#sky)"/>
+  <!-- mountains -->
+  <path d="M-20,420 L90,230 L150,300 L230,170 L330,320 L410,260 V860 H-20 Z" fill="#C9D4E2" opacity=".55"/>
+  <path d="M90,230 L112,268 L100,262 L86,276 L72,262 Z M230,170 L256,210 L242,204 L230,218 L214,206 Z" fill="#FBFCFD" opacity=".8"/>
+  <path d="M-20,500 Q100,430 200,470 T410,450 V860 H-20 Z" fill="#DCE4EE" opacity=".6"/>
+  <!-- shrine on the ridge -->
+  <g opacity=".35" transform="translate(250 400)">
+    <path d="M-50,0 L0,-30 L50,0 Z" fill="#7F8BA0"/><path d="M-52,0 Q0,-8 52,0" fill="none" stroke="#FBFCFD" stroke-width="4"/>
+    <rect x="-36" y="0" width="72" height="34" fill="#C86A55"/><rect x="-8" y="12" width="16" height="22" fill="#7F5A4E"/>
+  </g>
+  <!-- pines -->
+  <g fill="#9FB3A8" opacity=".45">
+    <path d="M30,560 L56,500 L82,560 Z M36,530 L56,480 L76,530 Z"/><path d="M340,600 L364,540 L388,600 Z M346,570 L364,520 L382,570 Z"/>
+  </g>
+  <g fill="#FBFCFD" opacity=".7"><path d="M44,528 L56,506 L68,528 Q56,522 44,528 Z M352,568 L364,546 L376,568 Q364,562 352,568 Z"/></g>
+  <!-- stone lantern with snow cap -->
+  <g opacity=".45" transform="translate(80 690)"><rect x="-7" y="30" width="14" height="50" fill="#AEB4BC"/><path d="M-26,30 L26,30 L18,18 L-18,18 Z" fill="#AEB4BC"/><rect x="-14" y="-4" width="28" height="22" fill="#F4DE9E"/><path d="M-24,-4 L24,-4 L0,-22 Z" fill="#9AA2AC"/><path d="M-26,-6 Q0,-28 26,-6 Q0,-14 -26,-6 Z" fill="#FBFCFD"/></g>
+  <!-- snowfall -->
+  <g fill="#FFFFFF" opacity=".85">
+    <circle cx="40" cy="80" r="2.4"/><circle cx="120" cy="140" r="1.8"/><circle cx="200" cy="60" r="2.2"/><circle cx="280" cy="120" r="1.6"/><circle cx="350" cy="70" r="2.4"/>
+    <circle cx="70" cy="260" r="1.8"/><circle cx="170" cy="330" r="2.4"/><circle cx="320" cy="250" r="2"/><circle cx="30" cy="380" r="1.6"/><circle cx="260" cy="560" r="2.2"/>
+    <circle cx="140" cy="620" r="1.8"/><circle cx="360" cy="680" r="2"/><circle cx="220" cy="760" r="2.4"/><circle cx="60" cy="800" r="1.6"/>
+  </g>
+  <path d="M-20,780 Q195,740 410,780 V860 H-20 Z" fill="#FBFCFD" opacity=".7"/>
+</svg>

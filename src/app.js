@@ -7,7 +7,15 @@
   const LAYOUTS = Object.fromEntries(D.layouts.layouts.map((l) => [l.layoutId, l]));
   const BOARDS = D.boards.boards;
   const CATS = Object.fromEntries(D.cats.cats.map((c) => [c.id, c]));
-  const SUIT_LETTER = { garden: 'G', teahouse: 'T', nightmarket: 'N', festival: 'F' };
+  const SUIT_LETTER = { garden: 'G', teahouse: 'T', nightmarket: 'N', festival: 'F', grove: 'B', pond: 'K', blossom: 'H', snowy: 'Y', moonlit: 'M' };
+  const RS = window.PurrRares;
+  // v5 chapters: boards 1-30 become chapters 1-3 (their old scenes); chapters 4-8 are boards 31-80.
+  const CHAPTERS = D.boards.chapters || [{ n: 1, id: 'garden', name: 'Tea Garden', scene: 'garden', from: 1, to: BOARDS.length, newCats: [] }];
+  const chapterOf = (id) => CHAPTERS.find((c) => id >= c.from && id <= c.to) || CHAPTERS[0];
+  const SCENES = ['garden', 'teahouse', 'nightmarket', 'grove', 'pond', 'blossom', 'snowy', 'moonlit'];
+  // per-suit tile numbers for helper marks (suit letter + index within the suit)
+  const SUIT_NUM = {};
+  for (const c of D.cats.cats) if (c.suit) { SUIT_NUM[c.suit] = SUIT_NUM[c.suit] || []; SUIT_NUM[c.suit].push(c.id); }
   const $ = (id) => document.getElementById(id);
   const app = $('app');
   const params = new URLSearchParams(location.search);
@@ -25,7 +33,7 @@
   const H = window.PurrHaptics || { fire() {}, set() {} };
 
   // ---------------------------------------------------------------- profile + save
-  const defaults = () => ({ v: PROFILE_VERSION, fish: 20, hints: 1, shuffles: 1, cleared: {}, stars: {}, best: {}, album: {}, daily: {}, settings: { showBlocked: false, marks: false, motion: false, sound: true, music: true, sfxVol: 0.7, musicVol: 0.3, haptics: true, track: 'rotate', trackIdx: 0 }, current: null, coachDone: {} });
+  const defaults = () => ({ v: PROFILE_VERSION, fish: 20, hints: 1, shuffles: 1, cleared: {}, stars: {}, best: {}, album: {}, daily: {}, rares: {}, rareState: { pity: 0, last: null }, settings: { showBlocked: false, marks: false, motion: false, sound: true, music: true, sfxVol: 0.7, musicVol: 0.3, haptics: true, track: 'rotate', trackIdx: 0 }, current: null, coachDone: {} });
   let migratedNote = '';
   let P = (function load() {
     if (noSave) return defaults();
@@ -35,6 +43,8 @@
         const p = Object.assign(defaults(), s);
         p.settings = Object.assign(defaults().settings, s.settings || {});
         p.stars = p.stars || {};
+        // v5 (rare cats): new fields default safely on older saves; nothing else changes
+        p.rares = p.rares || {}; p.rareState = Object.assign({ pity: 0, last: null }, p.rareState || {});
         if ((s.v || 0) < 3) {
           // v3 retune: boards were re-dealt (old mid-board saves no longer fit) and help got scarce.
           p.hints = Math.min(p.hints, 1); p.shuffles = Math.min(p.shuffles, 1); p.fish = Math.min(p.fish, HELP_COST);
@@ -108,12 +118,13 @@
   // ---------------------------------------------------------------- scenes + ambient petals
   function setScene(id) {
     const el = $('scene'); if (!el) return;
-    el.classList.remove('teahouse', 'nightmarket');
-    if (id === 'teahouse' || id === 'nightmarket') el.classList.add(id);
+    el.classList.remove(...SCENES);
+    if (SCENES.includes(id) && id !== 'garden') el.classList.add(id);
   }
   function sceneForBoard(b) {
     if (b && b.scene) return b.scene;
     if (!b) return 'garden';
+    if (typeof b.boardId === 'number') return chapterOf(b.boardId).scene;
     if (b.boardId >= 20) return 'nightmarket';
     if (b.boardId >= 10) return 'teahouse';
     return 'garden';
@@ -164,18 +175,21 @@
     const t = $('toast'); t.textContent = msg; t.classList.add('show');
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms || 2200);
   }
+  // Tips live in the header (over the board title), never over the board, so they can't hide a hinted cat.
   let tipTimer = 0;
   function tip(msg, ms) {
     const t = $('tip'); t.textContent = msg; t.classList.add('show');
-    clearTimeout(tipTimer); tipTimer = setTimeout(() => t.classList.remove('show'), ms || 3500);
+    t.parentElement.classList.add('tipping');
+    clearTimeout(tipTimer); tipTimer = setTimeout(hideTip, ms || 3500);
   }
+  function hideTip() { clearTimeout(tipTimer); const t = $('tip'); t.classList.remove('show'); t.parentElement.classList.remove('tipping'); }
   function show(name) { for (const s of ['home', 'album', 'play']) $(s).hidden = s !== name; $('fly').hidden = name !== 'play'; }
   function purse() { return `<span title="Fish">🐟 ${P.fish}</span>`; }
   function markFor(face) {
     const c = CATS[face]; if (!c) return '';
     if (c.bonusSet) return c.bonusSet === 'seasons' ? 'S' : 'L';
-    const suitIdx = ['garden', 'teahouse', 'nightmarket', 'festival'].indexOf(c.suit);
-    return SUIT_LETTER[c.suit] + (c.number - suitIdx * 8);
+    if (c.rarity) return '★';
+    return (SUIT_LETTER[c.suit] || '') + ((SUIT_NUM[c.suit] || []).indexOf(c.id) + 1);
   }
 
   // ---------------------------------------------------------------- home
@@ -188,30 +202,57 @@
     }
     return `<svg class="shape" viewBox="-0.8 -0.8 ${l.width * sx + 1.6} ${l.height * sy + 1.6}" preserveAspectRatio="xMidYMid meet">${r}</svg>`;
   }
-  function renderHome() {
-    setScene('garden');
-    startAmbience();
-    $('purseHome').innerHTML = purse();
-    const clearedCount = Object.keys(P.cleared).filter((k) => String(k) !== 'daily' && P.cleared[k]).length;
-    const chapter = clearedCount >= 20 ? 'Chapter 1 · Night Market' : clearedCount >= 10 ? 'Chapter 1 · Tea House' : 'Chapter 1 · Tea Garden';
-    if ($('homeSub')) $('homeSub').textContent = chapter;
-    const next = (BOARDS.find((b) => !P.cleared[b.boardId]) || {}).boardId;
-    $('boardGrid').innerHTML = BOARDS.map((b) => {
-      const l = LAYOUTS[b.layoutId];
-      const cleared = P.cleared[b.boardId];
-      const inProgress = P.current && P.current.boardId === b.boardId;
-      const lucky = (b.bonusSets || []).includes('lucky');
-      const seasons = (b.bonusSets || []).includes('seasons');
-      const bonusLabel = lucky ? ' + Lucky' : seasons ? ' + Seasons' : '';
-      const st = (P.stars && P.stars[b.boardId]) || 0;
-      const bt = P.best && P.best[b.boardId];
-      return `<button class="bcard${seasons ? ' seasons' : ''}${lucky ? ' lucky' : ''}" data-board="${b.boardId}">
+  function boardCard(b, next) {
+    const l = LAYOUTS[b.layoutId];
+    const cleared = P.cleared[b.boardId];
+    const inProgress = P.current && P.current.boardId === b.boardId;
+    const lucky = (b.bonusSets || []).includes('lucky');
+    const seasons = (b.bonusSets || []).includes('seasons');
+    const bonusLabel = lucky ? ' + Lucky' : seasons ? ' + Seasons' : '';
+    const st = (P.stars && P.stars[b.boardId]) || 0;
+    const bt = P.best && P.best[b.boardId];
+    return `<button class="bcard${seasons ? ' seasons' : ''}${lucky ? ' lucky' : ''}${cleared ? ' done' : ''}${!cleared && b.boardId === next ? ' is-next' : ''}" data-board="${b.boardId}">
         ${cleared ? '<div class="mini-seal">Cleared</div>' : ''}${!cleared && b.boardId === next ? '<div class="new">Next</div>' : ''}${inProgress && !cleared ? '<div class="new">Resume</div>' : ''}
         <div class="num">${b.boardId}</div>${shapeSVG(l)}<div class="nm">${l.name}</div>
         <div class="meta">${l.tileCount} tiles · ${l.layers} layers${bonusLabel}</div>${cleared || b.hard ? `<div class="bfoot">${cleared ? `<span class="stars" aria-label="${st} of 3 stars">${starStr(st)}</span>` : ''}${b.hard ? '<span class="hard-badge">Hard</span>' : ''}</div>` : ''}${bt ? `<div class="btime" aria-label="Best time ${fmtTime(bt)}">⏱ ${fmtTime(bt)}</div>` : ''}</button>`;
+  }
+  function albumTotals() {
+    const metAll = params.has('albumAll');
+    const commons = D.cats.cats.filter((c) => !c.rarity), rares = D.cats.cats.filter((c) => c.rarity);
+    return {
+      common: commons.filter((c) => metAll || (P.album[c.id] || 0) > 0).length, commonTotal: commons.length,
+      rare: rares.filter((c) => metAll || (P.rares[c.id] || 0) > 0).length, rareTotal: rares.length,
+    };
+  }
+  function renderHome() {
+    const next = (BOARDS.find((b) => !P.cleared[b.boardId]) || {}).boardId;
+    const curCh = chapterOf(next || BOARDS.length);
+    setScene(curCh.scene);
+    startAmbience();
+    $('purseHome').innerHTML = purse();
+    const clearedCount = Object.keys(P.cleared).filter((k) => String(k) !== 'daily' && P.cleared[k]).length;
+    if ($('homeSub')) $('homeSub').textContent = `Chapter ${curCh.n} · ${curCh.name}`;
+    $('boardGrid').innerHTML = CHAPTERS.map((ch) => {
+      const bs = BOARDS.filter((b) => b.boardId >= ch.from && b.boardId <= ch.to);
+      const done = bs.filter((b) => P.cleared[b.boardId]).length;
+      const stars = bs.reduce((a, b) => a + ((P.stars && P.stars[b.boardId]) || 0), 0);
+      const cats = (ch.newCats || []).map((id) => `<img src="${art(id)}" alt="" class="${(P.album[id] || 0) > 0 ? '' : 'unmet'}">`).join('');
+      const fresh = ch.n >= 4 && done === 0;
+      return `<section class="chapter" id="chapter-${ch.n}" data-chapter="${ch.n}">
+        <header class="chap chap-${ch.scene}" style="--scene:url('${new URL(`art/scenes/${ch.scene}.svg`, location.href).href}')">
+          <div class="chap-body"><small>Chapter ${ch.n}${fresh ? ' <i class="chap-new">New</i>' : ''}</small><b>${ch.name}</b>
+          <span>Boards ${ch.from}–${ch.to} · ${done}/${bs.length} cleared · <em>★ ${stars}/${bs.length * 3}</em></span></div>
+          ${cats ? `<div class="chap-cats" aria-label="New cats">${cats}</div>` : ''}
+          <div class="chap-bar"><i style="width:${Math.round((done / bs.length) * 100)}%"></i></div>
+        </header>
+        <div class="chap-grid">${bs.map((b) => boardCard(b, next)).join('')}</div></section>`;
     }).join('');
-    const met = Object.keys(P.album).length;
-    $('albumCount').textContent = `${met}/${D.cats.cats.length}`;
+    const tot = albumTotals();
+    $('albumCount').textContent = `${tot.common}/${tot.commonTotal} · ★${tot.rare}`;
+    // bring the chapter you're playing into view (once per render, instant)
+    const sc = $('homeScroll'), target = next ? document.querySelector(`#boardGrid [data-board="${next}"]`) : null;
+    if (sc && target && curCh.n > 1 && !params.has('top')) requestAnimationFrame(() => { sc.scrollTop = Math.max(0, target.closest('.chapter').offsetTop - 6); });
+    else if (sc) sc.scrollTop = 0;
     // Daily stub: unlocks after board 5
     const dailyBtn = $('btnDaily');
     if (dailyBtn) {
@@ -237,22 +278,52 @@
 
   // ---------------------------------------------------------------- album
   function renderAlbum() {
-    const groups = [['Garden', (c) => c.suit === 'garden'], ['Tea House', (c) => c.suit === 'teahouse'], ['Night Market', (c) => c.suit === 'nightmarket'], ['Festival', (c) => c.suit === 'festival'], ['Seasons', (c) => c.bonusSet === 'seasons'], ['Lucky', (c) => c.bonusSet === 'lucky']];
     const metAll = params.has('albumAll');
-    let met = 0;
-    $('albumList').innerHTML = groups.map(([name, f]) => {
+    const suits = (D.cats.suits || []).map((x) => [x.name + (x.chapter ? ` · Chapter ${x.chapter}` : ''), (c) => c.suit === x.id]);
+    const groups = suits.concat([['Seasons', (c) => c.bonusSet === 'seasons'], ['Lucky', (c) => c.bonusSet === 'lucky']]);
+    let html = groups.map(([name, f]) => {
       const cs = D.cats.cats.filter(f);
-      return `<h4>${name}</h4><div class="album-grid">${cs.map((c) => {
-        const n = P.album[c.id] || 0; const isMet = n > 0 || metAll; if (isMet) met++;
-        return `<div class="acard${isMet ? '' : ' locked'}"><img src="${art(c.id)}" alt=""><div><b>${isMet ? c.name : '???'}</b><small>${isMet ? c.bio : 'Match this cat to meet them.'}</small>${isMet ? `<span class="stamp">● met${n >= 50 ? ' ● 50' : ''}${n >= 200 ? ' ● 200' : ''}</span>` : ''}</div></div>`;
+      const n = cs.filter((c) => metAll || (P.album[c.id] || 0) > 0).length;
+      return `<h4>${name} <small>${n}/${cs.length}</small></h4><div class="album-grid">${cs.map((c) => {
+        const k = P.album[c.id] || 0; const isMet = k > 0 || metAll;
+        return `<div class="acard${isMet ? '' : ' locked'}"><img src="${art(c.id)}" alt=""><div><b>${isMet ? c.name : '???'}</b><small>${isMet ? c.bio : 'Match this cat to meet them.'}</small>${isMet ? `<span class="stamp">● met${k >= 50 ? ' ● 50' : ''}${k >= 200 ? ' ● 200' : ''}</span>` : ''}</div></div>`;
       }).join('')}</div>`;
     }).join('');
-    $('albumMet').textContent = `${met} of ${D.cats.cats.length} met`;
+    // Rare cats: collection hunt. Undiscovered ones show as silhouettes with their tier.
+    const tiers = (D.cats.rarities || []).slice().reverse();
+    const rareCats = D.cats.cats.filter((c) => c.rarity);
+    const found = rareCats.filter((c) => metAll || (P.rares[c.id] || 0) > 0).length;
+    const odds = RS ? RS.odds({}) : null;
+    html = `<div class="rare-head"><h4>Rare cats <small>${found}/${rareCats.length} found</small></h4>
+      <p>Rare cats sometimes sneak onto a board (from board 4). Match one to collect it.${odds ? ` Odds per board: Rare ${Math.round(odds.rare * 100)}% · Epic ${Math.round(odds.epic * 100)}% · Legendary ${Math.round(odds.legendary * 100)}%, a bit more on Hard boards and the longer you go without one.` : ''}</p></div>` +
+      tiers.map((t) => {
+        const cs = rareCats.filter((c) => c.rarity === t.id);
+        return `<h5 class="tier-h tier-${t.id}">${t.name}</h5><div class="album-grid rare-grid">${cs.map((c) => {
+          const k = P.rares[c.id] || 0, isMet = k > 0 || metAll;
+          return `<div class="acard rcard tier-${c.rarity}${isMet ? '' : ' locked'}"><img src="${art(c.id)}" alt=""><div><i class="tier-chip">${t.name}</i><b>${isMet ? c.name : '?'}</b><small>${isMet ? c.bio : 'Not found yet. Keep playing!'}</small>${isMet ? `<span class="stamp">Matched ×${k}</span>` : ''}</div></div>`;
+        }).join('')}</div>`;
+      }).join('') + html;
+    $('albumList').innerHTML = html;
+    const tot = albumTotals();
+    $('albumMet').textContent = `${tot.common}/${tot.commonTotal} cats · ${tot.rare}/${tot.rareTotal} rare`;
   }
 
   // ---------------------------------------------------------------- play state
   let game = null, board = null, layout = null, els = [], M = null, busy = false;
-  let lastMatchAt = 0, combo = 0, blockedTipShown = false, hintTimer = 0, coachStage = 0, warnedAt = -1;
+  let lastMatchAt = 0, combo = 0, blockedTipShown = false, coachStage = 0, warnedAt = -1;
+  // ---- collectible rare cats: a cosmetic skin over one cat of the board (src/rares.js). Rules never see it.
+  let rare = null; // { id, tier, base } for the current board
+  const skin = (face) => (rare && face === rare.base ? rare.id : face);
+  const isRareFace = (face) => !!(rare && face === rare.base);
+  function rollRare(keep) {
+    if (!RS) return null;
+    const force = params.get('rare');
+    if (force) return RS.roll(board, game.faces, P.rareState, Math.random, { force });
+    if (keep) return keep.rare; // Retry keeps this board's roll (no re-roll fishing, no lost rare)
+    const got = RS.roll(board, game.faces, P.rareState, Math.random);
+    RS.afterRoll(P.rareState, board, got);
+    return got;
+  }
   const hiddenBoard = new Set();  // present in the rules but drawn elsewhere (flying back from the shelf)
   const lifted = new Set();       // tapped, waiting in the animation queue (drawn lifted on the board)
 
@@ -310,14 +381,22 @@
     layout = LAYOUTS[board.layoutId];
     setScene(sceneForBoard(board));
     startAmbience();
+    const prevCur = P.current;
+    let freshRare = false;
     if (!opts.restart && P.current && P.current.boardId === board.boardId && P.current.state && P.current.state.v === 2 && P.current.state.faces && P.current.state.faces.length === layout.tiles.length) {
       game = C.Game.restore(layout, board, P.current.state);
       if (P.current.undoFree == null) P.current.undoFree = UNDO_FREE;
+      // resume: the same rare is still there after a reload
+      rare = RS && RS.validSaved(P.current.rare, game.faces) ? P.current.rare : null;
     } else {
       game = new C.Game(layout, board);
       if (!opts.restart || opts.daily) A.nextTrack(); // playlist: every new level starts the next track (Retry keeps it)
-      P.current = { boardId: board.boardId, ms: 0, state: game.serialize(), usedHelp: false, usedUndo: false, chains: 0, undoFree: UNDO_FREE, isDaily: !!board.isDaily };
+      const keep = opts.restart && prevCur && prevCur.boardId === board.boardId && prevCur.rareRolled ? { rare: RS && RS.validSaved(prevCur.rare, game.faces) ? prevCur.rare : null } : null;
+      rare = rollRare(keep);
+      freshRare = !!rare;
+      P.current = { boardId: board.boardId, ms: 0, state: game.serialize(), usedHelp: false, usedUndo: false, chains: 0, undoFree: UNDO_FREE, isDaily: !!board.isDaily, rare: rare || null, rareRolled: true, newRares: [] };
     }
+    hintMarks = null; coachI = -1;
     busy = false; combo = 0; lastMatchAt = 0; blockedTipShown = false; coachStage = 0; warnedAt = -1;
     hiddenBoard.clear(); lifted.clear();
     $('boardLabel').innerHTML = board.isDaily ? (`Daily · ` + todayKey()) : (`Board ${board.boardId} · ${layout.name}${board.hard ? ' <span class="hard-pill">Hard</span>' : ''}`);
@@ -325,13 +404,13 @@
     show('play');
     hideSheets(); $('win').hidden = true;
     clockAt = null; clockTick();
-    hideCoach();
     buildBoard();
     refresh();
     renderTrayInstant();
     save();
     if (game.taps === 0) boardEntry();
     if (board.tip && game.taps === 0) tip(board.tip, 4800);
+    if (rare && (freshRare || game.taps === 0)) setTimeout(() => toast(`✨ Something ${RS.TIERS[rare.tier].name.toLowerCase()} is hiding on this board…`, 2600), board.tip && game.taps === 0 ? 900 : 300);
     if (!board.isDaily && game.taps === 0) setTimeout(() => requestAnimationFrame(maybeCoach), RM() ? 0 : 520);
     if (game.isStuck()) setTimeout(showDead, 300);
   }
@@ -339,45 +418,47 @@
   /** Smooth board entry: tiles settle in layer by layer (transform/opacity only). */
   function boardEntry() {
     if (RM()) return;
-    const n = els.length;
     els.forEach((e, i) => {
       const p = game.geom.pos[i];
-      const delay = Math.min(520, p.z * 110 + (p.y * 9 + p.x * 4) * (n > 60 ? 0.6 : 1));
+      const delay = Math.min(520, p.z * 110 + (p.y * 9 + p.x * 4) * (els.length > 60 ? 0.6 : 1));
       anim(e, [{ opacity: 0, transform: 'translateY(-16px) scale(.9)' }, { opacity: 1, transform: 'none' }], { duration: T.enter, delay, easing: EASE.out, fill: 'backwards' });
     });
     anim($('shelf'), [{ opacity: 0 }, { opacity: 1 }], { duration: 360, easing: EASE.out }); // opacity only: slot rects stay exact
   }
 
-  function hideCoach() { const c = $('coach'); if (c) c.hidden = true; }
+  // Coach paw and hint paw are attached to the tile elements themselves (children of .tile), so they move with
+  // the tile, survive no stale coordinates, and are rebuilt with the board on resize.
+  const PAW_SVG = '<svg viewBox="0 0 48 48"><ellipse cx="24" cy="30" rx="10" ry="8.5"/><circle cx="10" cy="18" r="4.5"/><circle cx="18" cy="11" r="4.5"/><circle cx="30" cy="11" r="4.5"/><circle cx="38" cy="18" r="4.5"/></svg>';
+  let coachI = -1;
+  function raise(e, on) { if (on) e.style.zIndex = String(60000 + (Number(e.dataset.z0) || 0)); else e.style.zIndex = e.dataset.z0 || ''; }
+  function hideCoach() {
+    const e = coachI >= 0 && els[coachI];
+    if (e) { e.classList.remove('coach-target'); const p = e.querySelector('.coach-paw'); if (p) p.remove(); if (!e.classList.contains('hint')) raise(e, false); }
+    coachI = -1;
+  }
   function maybeCoach() {
     if (!board || board.isDaily) return;
     if (P.coachDone && P.coachDone[board.boardId]) return;
     if (board.boardId === 1 && game.taps === 0) {
       // a free cat whose twin is free too, so the first two taps break a pair
       const free = game.freeTiles();
-      for (const a of free) for (const b of free) if (a !== b && C.facesMatch(game.faces[a], game.faces[b])) { coachStage = 1; showCoach(a, null, 'Tap a free cat to send it to the shelf; two matching cats break!'); return; }
+      for (const a of free) for (const b of free) if (a !== b && C.facesMatch(game.faces[a], game.faces[b])) { coachStage = 1; showCoach(a, 'Tap a free cat to send it to the shelf; two matching cats break!'); return; }
     } else if (board.boardId === 2 && game.taps === 0) {
       const blocked = [];
       for (let i = 0; i < game.tileCount; i++) if (game.present[i] && !game.isFree(i)) blocked.push(i);
-      if (blocked.length) showCoach(blocked[0], null, 'Dimmed cats are blocked. Shelve the top cat to dig under it.');
+      if (blocked.length) showCoach(blocked[0], 'Dimmed cats are blocked. Shelve the top cat to dig under it.');
     } else if (board.boardId === 3 && game.taps === 0) {
       const covered = [];
       for (let i = 0; i < game.tileCount; i++) if (game.present[i] && game.blockReason(i) === 'covered') covered.push(i);
-      if (covered.length) showCoach(covered[0], null, 'Shelve the top cat to reach the one below');
+      if (covered.length) showCoach(covered[0], 'Shelve the top cat to reach the one below');
     }
   }
-  function showCoach(i, twin, msg) {
-    const c = $('coach'), paw = $('coachPaw'), ring = $('coachRing');
-    if (!c || !els[i] || RM()) { if (msg) tip(msg, 6000); return; }
-    c.hidden = false;
-    const e = els[i], boardEl = $('board');
-    const ox = boardEl.offsetLeft, oy = boardEl.offsetTop;
-    ring.style.left = (ox + e.offsetLeft) + 'px'; ring.style.top = (oy + e.offsetTop) + 'px';
-    ring.style.width = e.offsetWidth + 'px'; ring.style.height = e.offsetHeight + 'px';
-    paw.style.left = (ox + e.offsetLeft + e.offsetWidth * 0.55) + 'px';
-    paw.style.top = (oy + e.offsetTop + e.offsetHeight * 0.55) + 'px';
-    if (twin != null && els[twin]) { els[twin].classList.add('hint'); setTimeout(() => els[twin] && els[twin].classList.remove('hint'), 2400); }
+  function showCoach(i, msg) {
+    hideCoach();
     if (msg) tip(msg, 6000);
+    const e = els[i]; if (!e) return;
+    coachI = i; e.classList.add('coach-target'); raise(e, true);
+    const p = document.createElement('div'); p.className = 'coach-paw'; p.innerHTML = PAW_SVG; e.appendChild(p);
   }
   function markCoachDone() {
     if (!board || board.isDaily) return;
@@ -389,7 +470,7 @@
     if (!board || board.boardId !== 1 || coachStage !== 1) return;
     coachStage = 2;
     const twin = game.freeTiles().find((j) => C.facesMatch(game.faces[j], game.faces[tile]));
-    if (twin != null) showCoach(twin, null, 'Now tap its twin: matching cats break!');
+    if (twin != null) showCoach(twin, 'Now tap its twin: matching cats break!');
     else hideCoach();
   }
 
@@ -397,7 +478,7 @@
   function computeMetrics() {
     const wrap = $('boardWrap').getBoundingClientRect();
     const Lz = layout.layers, cols = layout.width / 2, rows = layout.height / 2;
-    const SH = 0.09, BAND = 0.104;
+    const SH = 0.115, BAND = 0.2; // layer lift per z, tile thickness + shadow (tile.css)
     const twW = (wrap.width - 20) / (cols + (Lz - 1) * SH + BAND);
     const twH = (wrap.height - 16) / (rows * 4 / 3 + (Lz - 1) * SH + BAND);
     const tw = Math.max(28, Math.floor(Math.min(twW, twH, 86)));
@@ -408,12 +489,16 @@
     const p = game.geom.pos[i], e = els[i];
     e.style.left = (p.x * M.hx + (M.Lz - 1 - p.z) * M.s) + 'px';
     e.style.top = (p.y * M.hy + (M.Lz - 1 - p.z) * M.s) + 'px';
-    e.style.zIndex = String(p.z * 1000 + p.y * 20 + p.x);
+    e.dataset.z0 = String(p.z * 1000 + p.y * 20 + p.x);
+    e.style.zIndex = e.dataset.z0;
+    e.style.setProperty('--z', String(p.z));
   }
   let pressI = -1;
   function buildBoard() {
     const b = $('board');
+    const ci = coachI; coachI = -1;
     b.innerHTML = '';
+    b.style.setProperty('--layers', String(layout.layers));
     M = computeMetrics();
     b.style.width = M.W + 'px'; b.style.height = M.H + 'px';
     b.style.setProperty('--tw', M.tw + 'px');
@@ -444,15 +529,20 @@
       return e;
     });
     els.forEach((_, i) => place(i));
+    if (ci >= 0) showCoach(ci);
   }
   function refresh() {
     for (let i = 0; i < els.length; i++) {
-      const e = els[i], face = game.faces[i];
+      const e = els[i], face = skin(game.faces[i]);
       if (e.dataset.face !== face) {
         e.dataset.face = face;
         e.querySelector('img').src = art(face);
         e.querySelector('.mark').textContent = markFor(face);
         e.classList.toggle('bonus', !!(CATS[face] && CATS[face].bonusSet));
+        const tier = (CATS[face] && CATS[face].rarity) || '';
+        e.classList.toggle('rare', !!tier); if (tier) e.dataset.tier = tier; else delete e.dataset.tier;
+        const gl = e.querySelector('.glint');
+        if (tier && !gl) { const g = document.createElement('i'); g.className = 'glint'; e.appendChild(g); } else if (!tier && gl) gl.remove();
         e.setAttribute('aria-label', (CATS[face] || {}).name || face);
       }
       const present = !!game.present[i];
@@ -498,10 +588,13 @@
   }
   const ttw = () => (slotRects[0] ? slotRects[0].width : 48);
   function makeTrayEl(face) {
+    face = skin(face);
     const el = document.createElement('div'); el.className = 'tt';
-    const f = document.createElement('div'); f.className = 'tile tface' + (CATS[face] && CATS[face].bonusSet ? ' bonus' : '');
+    const tier = (CATS[face] && CATS[face].rarity) || '';
+    const f = document.createElement('div'); f.className = 'tile tface' + (CATS[face] && CATS[face].bonusSet ? ' bonus' : '') + (tier ? ' rare' : '');
+    if (tier) f.dataset.tier = tier;
     f.style.setProperty('--tw', ttw() + 'px');
-    f.innerHTML = `<img alt="" draggable="false" src="${art(face)}"><span class="mark">${markFor(face)}</span>`;
+    f.innerHTML = `<img alt="" draggable="false" src="${art(face)}"><span class="mark">${markFor(face)}</span>${tier ? '<i class="glint"></i>' : ''}`;
     el.appendChild(f);
     return el;
   }
@@ -561,9 +654,9 @@
   const SPARK = '<svg viewBox="-10 -10 20 20"><path d="M0,-9 C1.2,-2 2,-1.2 9,0 C2,1.2 1.2,2 0,9 C-1.2,2 -2,1.2 -9,0 C-2,-1.2 -1.2,-2 0,-9Z" fill="#F4D27A" stroke="#C9A44C" stroke-width=".8"/></svg>';
   const PETAL = '<svg viewBox="-8 -8 16 16"><path d="M0,6 C-6,2 -6,-5 -2.5,-7 L0,-4.5 L2.5,-7 C6,-5 6,2 0,6 Z" fill="#F2B8C2" stroke="#2B2A28" stroke-width=".7" stroke-opacity=".35"/></svg>';
   const PAWP = '<svg viewBox="0 0 24 24"><g fill="#8FC1A9" stroke="#3F7563" stroke-width="1"><ellipse cx="12" cy="15.5" rx="5" ry="4.2"/><circle cx="5.4" cy="9.6" r="2.2"/><circle cx="9.5" cy="5.8" r="2.2"/><circle cx="14.5" cy="5.8" r="2.2"/><circle cx="18.6" cy="9.6" r="2.2"/></g></svg>';
-  function burst(x, y, strength) {
+  function burst(x, y, strength, tier) {
     if (RM()) return;
-    const n = 13 + Math.min(8, (strength || 1) * 2);
+    const n = (tier ? 24 : 13) + Math.min(8, (strength || 1) * 2);
     // soft gold flash + ring behind the particles (transform/opacity only)
     const glow = document.createElement('div'); glow.className = 'glow';
     glow.style.left = x + 'px'; glow.style.top = y + 'px'; fly.appendChild(glow);
@@ -576,14 +669,50 @@
       p.innerHTML = k % 3 === 0 ? SPARK : k % 3 === 1 ? PETAL : PAWP;
       p.style.left = x + 'px'; p.style.top = y + 'px';
       fly.appendChild(p);
-      const a = (k / n) * Math.PI * 2 + Math.random() * 0.45, d = 46 + Math.random() * 38;
+      if (tier) p.classList.add('tier-' + tier);
+      const a = (k / n) * Math.PI * 2 + Math.random() * 0.45, d = (tier ? 60 : 46) + Math.random() * (tier ? 60 : 38);
       const dx = Math.cos(a) * d * 1.15, dy = Math.sin(a) * d * 0.75 - 6, r = Math.random() * 260 - 130, sc = 0.85 + Math.random() * 0.55;
       anim(p, [
         { transform: 'translate(0,0) scale(.25) rotate(0deg)', opacity: 1 },
         { transform: `translate(${dx * 0.78}px, ${dy * 0.78}px) scale(${sc}) rotate(${r * 0.6}deg)`, opacity: 1, offset: 0.5 },
         { transform: `translate(${dx}px, ${dy + 18}px) scale(${sc * 0.75}) rotate(${r}deg)`, opacity: 0 },
-      ], { duration: 620 + Math.random() * 200, easing: EASE.out }).then(() => p.remove());
+      ], { duration: (tier ? 1000 : 620) + Math.random() * (tier ? 500 : 200), easing: EASE.out }).then(() => p.remove());
     }
+    if (tier) { // tier-coloured flash + a second, slower ring of sparkles
+      const g2 = document.createElement('div'); g2.className = 'glow rare-glow tier-' + tier;
+      g2.style.left = x + 'px'; g2.style.top = y + 'px'; fly.appendChild(g2);
+      anim(g2, [{ transform: 'scale(.3)', opacity: 0 }, { transform: 'scale(1.6)', opacity: 1, offset: 0.3 }, { transform: 'scale(2.4)', opacity: 0 }], { duration: 1100, easing: EASE.out }).then(() => g2.remove());
+      for (let k = 0; k < 10; k++) {
+        const p = document.createElement('div'); p.className = 'pt tier-' + tier; p.innerHTML = SPARK;
+        p.style.left = x + 'px'; p.style.top = y + 'px'; fly.appendChild(p);
+        const a = (k / 10) * Math.PI * 2, d = 90 + Math.random() * 30;
+        anim(p, [{ transform: 'translate(0,0) scale(.2)', opacity: 0 }, { transform: `translate(${Math.cos(a) * d * 0.6}px, ${Math.sin(a) * d * 0.5}px) scale(1.3) rotate(90deg)`, opacity: 1, offset: 0.4 },
+          { transform: `translate(${Math.cos(a) * d}px, ${Math.sin(a) * d * 0.8}px) scale(.4) rotate(220deg)`, opacity: 0 }], { duration: 1500, delay: 120, easing: EASE.out, fill: 'backwards' }).then(() => p.remove());
+      }
+    }
+  }
+  /** "RARE: Pearl!" banner under the shelf. */
+  function rareBanner(id) {
+    const el = $('rareBanner'), c = CATS[id]; if (!el || !c) return;
+    el.className = 'rare-banner tier-' + c.rarity;
+    el.innerHTML = `<b>${RS.TIERS[c.rarity].name.toUpperCase()}</b> ${c.name}!`;
+    const sr = $('shelf').getBoundingClientRect();
+    el.style.top = (sr.bottom + 10) + 'px';
+    if (RM()) { anim(el, [{ opacity: 1 }, { opacity: 1, offset: 0.85 }, { opacity: 0 }], { duration: 1800 }); return; }
+    // easing per keyframe (an overall easing would squash the hold): pop in, hold ~1.5 s, fade
+    anim(el, [{ opacity: 0, transform: 'translate(-50%, -30%) scale(.5)', easing: EASE.out }, { opacity: 1, transform: 'translate(-50%, 0) scale(1.12)', offset: 0.1, easing: EASE.out }, { opacity: 1, transform: 'translate(-50%, 0) scale(1)', offset: 0.18 },
+      { opacity: 1, transform: 'translate(-50%, 0) scale(1)', offset: 0.86, easing: 'ease-in' }, { opacity: 0, transform: 'translate(-50%, 8%) scale(.96)' }], { duration: 2400 });
+  }
+  /** First discovery: a "New cat collected!" card pops in the middle of the screen (non-blocking). */
+  function newCatCard(id) {
+    const c = CATS[id], el = $('newCat'); if (!c || !el) return;
+    el.className = 'newcat tier-' + c.rarity; el.hidden = false;
+    $('newCatImg').src = art(id); $('newCatTier').textContent = RS.TIERS[c.rarity].name; $('newCatName').textContent = c.name; $('newCatBio').textContent = c.bio;
+    const done = () => { el.hidden = true; };
+    if (RM()) { anim(el, [{ opacity: 1 }, { opacity: 1, offset: 0.9 }, { opacity: 0 }], { duration: 2600 }).then(done); return; }
+    anim(el, [{ opacity: 0, transform: 'translate(-50%, -50%) scale(.4) rotate(-6deg)', easing: EASE.out }, { opacity: 1, transform: 'translate(-50%, -50%) scale(1.08) rotate(2deg)', offset: 0.1, easing: EASE.out },
+      { opacity: 1, transform: 'translate(-50%, -50%) scale(1) rotate(0)', offset: 0.16 }, { opacity: 1, transform: 'translate(-50%, -50%) scale(1)', offset: 0.9, easing: 'ease-in' },
+      { opacity: 0, transform: 'translate(-50%, -46%) scale(.94)' }], { duration: 3000 }).then(done);
   }
   function showCombo(n, x) {
     // pops just under the shelf (the header above is too tight), over everything else in the fly layer
@@ -662,8 +791,9 @@
     if (speed) {
       await Promise.all(pair.map((e, k) => anim(e.el.firstChild, [{ transform: 'none' }, { transform: `translateX(${k ? -5 : 5}px) scale(1.1, .9)` }], { duration: D(T.squash), easing: EASE.inOut, fill: 'forwards' })));
     }
-    sfx('match', job.combo); if (!job.pre) buzz('match');
-    burst(midX, midY, job.combo);
+    if (job.rare) { sfx('rare', job.rare.tier); if (!job.pre) buzz('rare'); rareBanner(job.rare.id); if (job.newRare) setTimeout(() => newCatCard(job.rare.id), RM() ? 0 : 650); }
+    else { sfx('match', job.combo); if (!job.pre) buzz('match'); }
+    burst(midX, midY, job.combo, job.rare ? job.rare.tier : null);
     if (job.combo >= 2) showCombo(job.combo, midX);
     if (job.combo === 3 || job.combo === 6) setTimeout(() => sfx('meow'), 160);
     const pops = pair.map((e, k) => anim(e.el.firstChild, [
@@ -711,14 +841,20 @@
     const r = game.tap(i);
     sfx('tap'); buzz('tap');
     lifted.add(i);
-    const job = { type: 'add', tile: i, partner: r.partner, combo: 0 };
+    const job = { type: 'add', tile: i, partner: r.partner, combo: 0, rare: null };
     if (r.broke) {
       const now = Date.now();
       combo = now - lastMatchAt < 3200 ? combo + 1 : 1;
       lastMatchAt = now;
       job.combo = combo;
       if (combo > 1) P.current.chains = (P.current.chains || 0) + 1;
-      for (const f of [game.faces[i], game.faces[r.partner]]) P.album[f] = (P.album[f] || 0) + (CATS[f] && CATS[f].bonusSet ? 1 : 0.5);
+      if (isRareFace(game.faces[i])) {
+        // collectible rare pair: counts toward the rare collection, not the base cat
+        const first = !((P.rares[rare.id] || 0) > 0);
+        P.rares[rare.id] = (P.rares[rare.id] || 0) + 1;
+        job.rare = rare;
+        if (first) { job.newRare = true; P.current.newRares = (P.current.newRares || []).concat(rare.id); }
+      } else for (const f of [game.faces[i], game.faces[r.partner]]) P.album[f] = (P.album[f] || 0) + (CATS[f] && CATS[f].bonusSet ? 1 : 0.5);
       if (coachStage === 2) { markCoachDone(); coachStage = 3; }
     } else {
       if (coachStage === 1) job.coachTwin = true;
@@ -727,7 +863,7 @@
     if (H.isIOS && !running && !Q.length) { // see buzzLater: schedule while we still hold the gesture
       const k = RM() ? 0 : 1, tLand = k * T.fly;
       job.pre = true;
-      if (r.broke) buzzLater('match', tLand + k * T.squash);
+      if (r.broke) buzzLater(job.rare ? 'rare' : 'match', tLand + k * T.squash);
       else { buzzLater('land', tLand); if (job.warn) buzzLater('warn', tLand + 110); }
       if (game.isWon()) { pre.win = true; buzzLater('win', tLand + k * (T.squash + T.pop + 60)); }
       else if (game.isStuck()) { pre.full = game.taps; buzzLater('full', tLand + k * (T.land + 120)); }
@@ -743,7 +879,29 @@
   }
 
   // ---------------------------------------------------------------- undo / hint / shuffle / finish
-  function clearHint() { clearTimeout(hintTimer); els.forEach((e) => e.classList.remove('hint')); fly.querySelectorAll('.tface.hint').forEach((e) => e.classList.remove('hint')); }
+  // ---- hints (v5): the highlight is a class on the tile elements themselves (glow ring, bounce, paw child),
+  // the rest of the board dims, and it stays until the next tap or action. It is re-applied after a re-layout.
+  let hintMarks = null; // { tiles: [board tiles], shelf: [shelf tiles], tap: tile to tap }
+  function clearHint() {
+    hintMarks = null;
+    const b = $('board'); if (b) b.classList.remove('hinting');
+    els.forEach((e) => {
+      if (!e.classList.contains('hint')) return;
+      e.classList.remove('hint'); const pw = e.querySelector('.hint-paw'); if (pw) pw.remove();
+      if (!e.classList.contains('coach-target')) raise(e, false);
+    });
+    fly.querySelectorAll('.tface.hint').forEach((e) => e.classList.remove('hint'));
+  }
+  function applyHint() {
+    if (!hintMarks || !game) return;
+    $('board').classList.add('hinting');
+    for (const t of hintMarks.tiles) {
+      const e = els[t]; if (!e || !game.present[t]) continue;
+      e.classList.add('hint'); raise(e, true);
+      if (t === hintMarks.tap && !e.querySelector('.hint-paw')) { const p = document.createElement('div'); p.className = 'hint-paw'; p.innerHTML = PAW_SVG; e.appendChild(p); }
+    }
+    for (const t of hintMarks.shelf) { const v = vt.find((x) => x.tile === t); if (v) v.el.firstChild.classList.add('hint'); }
+  }
   function payUndo(free) {
     if (free) return true;
     if (P.current.undoFree > 0) { P.current.undoFree--; return true; }
@@ -818,6 +976,10 @@
   async function hint() {
     if (busy) return;
     await flush();
+    if (hintMarks) { // already showing: don't charge again, just nudge
+      const t = els[hintMarks.tap]; if (t && !RM()) anim(t, [{ transform: 'none' }, { transform: 'translateY(-8px) scale(1.08)' }, { transform: 'none' }], { duration: 360, easing: EASE.spring, composite: 'add' });
+      toast('Tap the glowing cat with the paw.', 1800); return;
+    }
     clearHint();
     if (game.over) { showDead(); return; }
     const h = game.hint({ maxNodes: 60000 });
@@ -827,13 +989,27 @@
     if (!spend('hints')) return;
     P.current.usedHelp = true; persist();
     refresh();
-    sfx('hint');
-    const mark = (t) => {
-      if (game.present[t]) { const e = els[t]; void e.offsetWidth; e.classList.add('hint'); }
-      else { const v = vt.find((x) => x.tile === t); if (v) v.el.firstChild.classList.add('hint'); }
-    };
-    mark(h.tile); (h.with || []).forEach(mark);
-    hintTimer = setTimeout(clearHint, 1600);
+    sfx('hint'); buzz('hint');
+    // settle the board first: finish the entry animation so the highlight sits on tiles at rest
+    els.forEach((e) => { if (e.getAnimations) e.getAnimations().forEach((a) => { try { a.finish(); } catch (err) { /* infinite */ } }); });
+    hideCoach(); hideTip();
+    let withT = (h.with || []).slice();
+    if (!withT.length && h.safe && !h.onTray) {
+      // show the pair: a free twin that still keeps a win open after both taps (checked, then undone)
+      for (let u = 0; u < game.tileCount && !withT.length; u++) {
+        if (u === h.tile || !game.present[u] || !game.isFree(u) || !C.facesMatch(game.faces[u], game.faces[h.tile])) continue;
+        const r1 = game.tap(h.tile); if (!r1) break;
+        const r2 = game.over ? null : game.tap(u);
+        const ok = r2 && !game.over && game.isSolvable(6000) === true;
+        if (r2) game.undo();
+        game.undo();
+        if (ok) withT = [u];
+      }
+    }
+    hintMarks = { tiles: [], shelf: [], tap: h.tile };
+    for (const t of [h.tile].concat(withT)) (game.present[t] ? hintMarks.tiles : hintMarks.shelf).push(t);
+    applyHint();
+    tip(hintMarks.shelf.length ? 'Tap the cat with the paw: it matches the glowing cat on your shelf.' : withT.length ? 'Tap the cat with the paw, then its glowing twin.' : 'Tap the cat with the paw.', 4200);
     if (h.safe === null) toast('This cat is a fine move, but I could not check it all the way to a win.', 3200);
   }
   function flipAll() {
@@ -870,7 +1046,7 @@
   function showDead() {
     if (!game || !game.isStuck() || busy) { if (game && game.isStuck() && busy) setTimeout(showDead, 200); return; }
     if (!$('deadSheet').hidden) return;
-    clearHint(); hideCoach(); clearTimeout(tipTimer); $('tip').classList.remove('show');
+    clearHint(); hideCoach(); hideTip();
     clockTick(); $('deadScrim').hidden = false; $('deadSheet').hidden = false;
     $('deadTitle').textContent = 'Out of space!';
     $('deadText').textContent = `All ${game.slots} slots filled without a pair. Revive sends every cat on the shelf back to its spot.`;
@@ -927,6 +1103,7 @@
     const fish = PAY.clear + bonus + chains;
     P.fish += fish;
     const moves = game.moves;
+    const newRares = (P.current.newRares || []).filter((id) => CATS[id]);
     clockTick();
     const time = Math.round(P.current.ms || 0);
     const bestKey = board.isDaily ? null : board.boardId;
@@ -948,10 +1125,13 @@
     wt.innerHTML = `<span class="t">${fmtTime(time, true)}</span>` + (record ? `<b class="rec">New record!</b><small>was ${fmtTime(prevBest, true)}</small>`
       : bestKey != null && prevBest != null ? `<small>Best ${fmtTime(prevBest, true)}</small>` : bestKey != null && time > 0 ? '<small>First best time</small>' : '');
     wt.classList.toggle('record', record);
+    const wn = $('winNew');
+    wn.hidden = !newRares.length;
+    wn.innerHTML = newRares.map((id) => `<div class="win-new-cat tier-${CATS[id].rarity}"><img src="${art(id)}" alt=""><div><b>New cat collected!</b><span>${RS.TIERS[CATS[id].rarity].name} · ${CATS[id].name}</span></div></div>`).join('');
     $('winStarsNote').textContent = stars === 3 ? 'Perfect: no hints, shuffles or undos' : stars === 2 ? 'No hints or shuffles (3 stars = no undos too)' : '3 stars = no hints, shuffles or undos';
     if (board.isDaily) $('btnNext').textContent = 'Boards';
     else $('btnNext').textContent = board.boardId < BOARDS.length ? 'Next' : 'Boards';
-    const cats = [...new Set(game.faces)].filter((f) => CATS[f] && !CATS[f].bonusSet);
+    const cats = [...new Set(game.faces.map(skin))].filter((f) => CATS[f] && !CATS[f].bonusSet).sort((a, b) => (CATS[b].rarity ? 1 : 0) - (CATS[a].rarity ? 1 : 0));
     $('parade').innerHTML = cats.slice(0, 5).map((f) => `<img src="${art(f)}" alt="">`).join('');
     const st = $('sealStamp'); st.style.animation = 'none'; void st.offsetWidth; st.style.animation = '';
     $('win').hidden = false;
@@ -1025,7 +1205,7 @@
   $('deadHome').addEventListener('click', click(() => { hideSheets(); board = null; resetFly(); applySettings(); renderHome(); show('home'); }));
   // the game-over sheet can't be dismissed by tapping outside it (that left a locked board with no way out)
   $('deadScrim').addEventListener('click', () => { if (!game || !game.over) hideSheets(); });
-  $('btnHome').addEventListener('click', click(() => { board = null; resetFly(); applySettings(); renderHome(); show('home'); }));
+  $('btnHome').addEventListener('click', click(() => { clearHint(); hideCoach(); hideTip(); board = null; resetFly(); applySettings(); renderHome(); show('home'); }));
   $('btnNext').addEventListener('click', click(() => {
     $('win').hidden = true;
     if (board && board.isDaily) { renderHome(); show('home'); return; }
@@ -1061,14 +1241,16 @@
   $('optRestart').addEventListener('click', click(() => { hideSheets(); startBoard(board.boardId, { restart: true }); }));
   $('optReset').addEventListener('click', () => { if (confirm('Reset all Purrjong progress on this device?')) { P = defaults(); save(); applySettings(); hideSheets(); resetFly(); renderHome(); show('home'); } });
   let rz = 0;
-  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(async () => { if (game && !$('play').hidden) { await flush(); buildBoard(); refresh(); renderTrayInstant(); } }, 120); });
+  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(async () => { if (game && !$('play').hidden) { await flush(); buildBoard(); refresh(); renderTrayInstant(); applyHint(); } }, 120); });
 
   // test / screenshot hooks (no UI)
   window.__purr = {
     get game() { return game; }, tap: onTap, undo, hint, shuffle, idle, flush,
     get busy() { return busy || running; }, get vt() { return vt.map((e) => e.tile); },
+    get rare() { return rare; }, get hintMarks() { return hintMarks; }, get profile() { return P; },
   };
 
+  document.addEventListener('touchstart', () => {}, { passive: true }); // lets iOS Safari apply :active (button press-down)
   // ---------------------------------------------------------------- boot
   applySettings();
   startAmbience();

@@ -244,7 +244,15 @@
     },
     star(k) { const t = ctx.currentTime; bell(PENTA[3 + 2 * (k || 0)], t, 0.11, 0.8); },
     click() { const t = ctx.currentTime; osc('sine', 1350, t, 0.035, 0.12, { to: 900, glide: 0.03 }); noise(t, 0.012, 0.05, { type: 'highpass', f: 3000 }); },
-    hint() { const t = ctx.currentTime; bell(PENTA[2], t, 0.08, 0.6); bell(PENTA[4], t + 0.09, 0.07, 0.7); },
+    hint() { const t = ctx.currentTime; bell(PENTA[2], t, 0.09, 0.6); bell(PENTA[4], t + 0.09, 0.08, 0.7); bell(PENTA[6], t + 0.2, 0.05, 0.9); },
+    // collectible rare pair: a shimmering arpeggio that climbs higher (and longer) with the tier
+    rare(tier) {
+      const t = ctx.currentTime, n = tier === 'legendary' ? 9 : tier === 'epic' ? 7 : 5, step = tier === 'legendary' ? 0.075 : 0.085;
+      for (let k = 0; k < n; k++) bell(PENTA[Math.min(PENTA.length - 1, k)] * (k >= PENTA.length ? 2 : 1), t + k * step, 0.12, 1.3, 0.7);
+      const pad = tier === 'legendary' ? [293.66, 369.99, 440, 587.33, 739.99] : [293.66, 440, 587.33];
+      pad.forEach((f) => osc('sine', f, t + 0.05, tier === 'rare' ? 1.4 : 2.4, 0.045, { a: 0.18, rev: 0.7 }));
+      for (let k = 0; k < (tier === 'rare' ? 6 : 12); k++) osc('sine', PENTA[4 + (k % 5)] * 2, t + 0.3 + k * 0.05, 0.22, 0.02, { rev: 0.8 });
+    },
     meow() {
       // tiny synthetic meow: buzzy source through two moving formants, pitch up-then-down
       const t = ctx.currentTime, d = 0.42;

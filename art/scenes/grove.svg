@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#E3EFD9"/><stop offset="50%" stop-color="#F1F2E2"/><stop offset="100%" stop-color="#E4E9D2"/></linearGradient>
+    <radialGradient id="sun" cx=".5" cy=".5" r=".5"><stop offset="0%" stop-color="#FFF8E0" stop-opacity=".9"/><stop offset="100%" stop-color="#FFF8E0" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="390" height="844" fill="url(#sky)"/>
+  <circle cx="290" cy="150" r="120" fill="url(#sun)"/>
+  <!-- distant misty grove -->
+  <g stroke="#B9CDA8" stroke-width="9" opacity=".32" stroke-linecap="round">
+    <path d="M110,844 V120 M150,844 V60 M196,844 V140 M236,844 V90 M276,844 V150"/>
+  </g>
+  <g stroke="#A7C092" stroke-width="2" opacity=".35"><path d="M106,260 h8 M146,330 h8 M192,280 h8 M232,360 h8 M272,300 h8 M106,470 h8 M146,520 h8 M232,560 h8"/></g>
+  <!-- near stalks, left and right -->
+  <g fill="none" stroke-linecap="round">
+    <g stroke="#8FB57E" stroke-width="13" opacity=".42"><path d="M24,844 V40 M64,844 V-10 M356,844 V20"/></g>
+    <g stroke="#7AA56A" stroke-width="3" opacity=".45"><path d="M16,210 h16 M16,420 h16 M16,640 h16 M56,150 h16 M56,380 h16 M56,600 h16 M348,250 h16 M348,480 h16 M348,700 h16"/></g>
+  </g>
+  <!-- leaf sprays -->
+  <g fill="#9CC48A" opacity=".45">
+    <path d="M64,150 C88,128 116,126 132,134 C110,150 86,154 64,150 Z"/>
+    <path d="M64,160 C84,170 98,190 100,206 C82,196 70,180 64,160 Z"/>
+    <path d="M24,300 C46,282 70,282 84,290 C64,302 44,306 24,300 Z"/>
+    <path d="M356,180 C330,160 300,160 286,168 C310,184 334,186 356,180 Z"/>
+    <path d="M356,190 C340,206 330,226 330,242 C346,230 354,212 356,190 Z"/>
+    <path d="M356,420 C334,404 310,404 296,412 C316,426 338,428 356,420 Z"/>
+  </g>
+  <!-- stone path + lantern -->
+  <path d="M-20,700 Q195,640 410,700 V860 H-20 Z" fill="#D8E3C6" opacity=".55"/>
+  <g fill="#E6E0CC" opacity=".6"><ellipse cx="150" cy="730" rx="30" ry="9"/><ellipse cx="220" cy="760" rx="34" ry="10"/><ellipse cx="170" cy="800" rx="38" ry="11"/></g>
+  <g opacity=".4" transform="translate(290 600)"><rect x="-6" y="40" width="12" height="60" fill="#B8B3A3"/><path d="M-26,40 L26,40 L16,26 L-16,26 Z" fill="#B8B3A3"/><rect x="-14" y="6" width="28" height="20" fill="#F2E3B5"/><path d="M-22,6 L22,6 L0,-12 Z" fill="#A9A493"/><path d="M-30,100 H30" stroke="#A9A493" stroke-width="6"/></g>
+  <!-- light motes -->
+  <g fill="#FFF6D0" opacity=".7"><circle cx="160" cy="220" r="2.2"/><circle cx="250" cy="300" r="1.6"/><circle cx="120" cy="420" r="1.8"/><circle cx="300" cy="520" r="2"/><circle cx="210" cy="180" r="1.4"/></g>
+</svg>

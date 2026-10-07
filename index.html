@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#F6F0E4">
-<meta name="description" content="Purrjong — cozy cat mahjong solitaire. Send kitties to the shelf and match pairs across hand-built boards. No timers, no pressure.">
+<meta name="description" content="Purrjong — cozy cat mahjong solitaire. Send kitties to the shelf and match pairs across 80 boards in 8 chapters, and hunt for rare cats.">
 <title>Purrjong: Cat Mahjong Puzzle</title>
 <link rel="icon" href="art/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" sizes="180x180" href="art/apple-touch-icon.png">
@@ -12,9 +12,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Purrjong">
-<meta name="purrjong-version" content="4.2.1-202610062311">
-<link rel="stylesheet" href="src/tile.css?v=4.2.1-202610062311">
-<link rel="stylesheet" href="src/app.css?v=4.2.1-202610062311">
+<meta name="purrjong-version" content="5.0.0-202610071935">
+<link rel="stylesheet" href="src/tile.css?v=5.0.0-202610071935">
+<link rel="stylesheet" href="src/app.css?v=5.0.0-202610071935">
 </head>
 <body>
 <div class="scene" id="scene" aria-hidden="true"></div>
@@ -31,6 +31,7 @@
       <div class="purse" id="purseHome"></div>
     </header>
     <p class="home-sub" id="homeSub">Chapter 1 · Tea Garden</p>
+    <div class="home-scroll" id="homeScroll">
     <button class="daily-card" id="btnDaily" hidden>
       <div class="daily-seal">Daily</div>
       <div class="daily-body">
@@ -40,6 +41,7 @@
       <span class="daily-go">Play</span>
     </button>
     <div class="board-grid" id="boardGrid"></div>
+    </div>
     <div class="home-actions">
       <button class="pill" id="btnAlbum">Album <span id="albumCount"></span></button>
       <button class="pill ghost" id="btnSettingsHome">Settings</button>
@@ -61,6 +63,7 @@
     <header class="topbar">
       <button class="icon-btn" id="btnHome" aria-label="Home"><svg viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5M6.5 10v8.5h11V10"/></svg></button>
       <div class="title" id="boardLabel">Board 1</div>
+      <div class="tip" id="tip" role="status" aria-live="polite"></div>
       <button class="icon-btn" id="btnSettings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></button>
     </header>
     <div class="progress">
@@ -76,15 +79,8 @@
       </div>
     </div>
     <div class="board-wrap" id="boardWrap">
-      <div class="tip" id="tip"></div>
       <div id="board" role="application" aria-label="Board"></div>
       <div class="fx" id="fx"></div>
-      <div class="coach" id="coach" hidden>
-        <div class="paw" id="coachPaw" aria-hidden="true">
-          <svg viewBox="0 0 48 48"><ellipse cx="24" cy="30" rx="10" ry="8.5"/><circle cx="10" cy="18" r="4.5"/><circle cx="18" cy="11" r="4.5"/><circle cx="30" cy="11" r="4.5"/><circle cx="38" cy="18" r="4.5"/></svg>
-        </div>
-        <div class="coach-ring" id="coachRing"></div>
-      </div>
     </div>
     <button class="finish" id="btnFinish" hidden>Finish ✓</button>
     <nav class="tray">
@@ -95,7 +91,8 @@
   </section>
 
   <!-- flying / shelf tiles, particles, combo text (above the board, below sheets) -->
-  <div class="fly" id="fly" aria-hidden="true"><div class="combo" id="combo"></div></div>
+  <div class="fly" id="fly" aria-hidden="true"><div class="combo" id="combo"></div><div class="rare-banner" id="rareBanner"></div>
+    <div class="newcat" id="newCat" hidden><div class="newcat-glow"></div><img alt="" id="newCatImg"><b id="newCatTier">Rare</b><strong>New cat collected!</strong><span id="newCatName"></span><small id="newCatBio"></small></div></div>
 
   <!-- tray-full sheet (soft fail) -->
   <div class="scrim" id="deadScrim" hidden></div>
@@ -143,6 +140,7 @@
       <div class="win-stars" id="winStars" aria-label="stars"></div>
       <div class="parade" id="parade" aria-hidden="true"></div>
       <div class="win-time" id="winTime"></div>
+      <div class="win-new" id="winNew" hidden></div>
       <small class="win-stars-note" id="winStarsNote"></small>
       <p id="winText"></p>
       <button class="pill big" id="btnNext">Next</button>
@@ -153,10 +151,11 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<script src="data/data.js?v=4.2.1-202610062311"></script>
-<script src="src/core.js?v=4.2.1-202610062311"></script>
-<script src="src/audio.js?v=4.2.1-202610062311"></script>
-<script src="src/haptics.js?v=4.2.1-202610062311"></script>
-<script src="src/app.js?v=4.2.1-202610062311"></script>
+<script src="data/data.js?v=5.0.0-202610071935"></script>
+<script src="src/core.js?v=5.0.0-202610071935"></script>
+<script src="src/rares.js?v=5.0.0-202610071935"></script>
+<script src="src/audio.js?v=5.0.0-202610071935"></script>
+<script src="src/haptics.js?v=5.0.0-202610071935"></script>
+<script src="src/app.js?v=5.0.0-202610071935"></script>
 </body>
 </html>

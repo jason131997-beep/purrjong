@@ -29,6 +29,7 @@
   const PATTERNS = {
     tap: [1, 8], revive: [2, [14, 40, 14]], land: [1, 12], match: [2, [16, 50, 22]], blocked: [1, 28], warn: [1, 14],
     full: [2, [40, 70, 40]], win: [3, [20, 60, 20, 60, 50]], undo: [1, 10], click: [1, 6],
+    hint: [1, 10], rare: [3, [30, 50, 30, 50, 60]],
   };
   function fire(name) {
     if (!enabled) return;
