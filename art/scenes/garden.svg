@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#E8F0E4"/><stop offset="55%" stop-color="#F6F0E4"/><stop offset="100%" stop-color="#EDE4D0"/></linearGradient>
+  </defs>
+  <rect width="390" height="844" fill="url(#sky)"/>
+  <!-- soft hills -->
+  <path d="M-20,520 Q80,470 160,500 T340,490 T420,520 V860 H-20 Z" fill="#D9E8D6" opacity=".55"/>
+  <path d="M-20,560 Q120,510 220,545 T420,555 V860 H-20 Z" fill="#CFE3D6" opacity=".45"/>
+  <!-- moon gate silhouette -->
+  <path d="M255,380 A70,70 0 0 1 395,380 V520 H255 Z" fill="none"/>
+  <path d="M268,400 a55,55 0 0 1 110,0 v90 h-18 v-90 a37,37 0 0 0 -74,0 v90 h-18 z" fill="#E3D9C4" opacity=".5"/>
+  <!-- bamboo stalks -->
+  <g stroke="#9BB89A" stroke-width="6" fill="none" opacity=".35" stroke-linecap="round">
+    <path d="M42,844 V320 M42,400 h8 M42,520 h-7 M42,640 h8"/>
+    <path d="M68,844 V280 M68,360 h7 M68,480 h-6 M68,600 h7"/>
+    <path d="M330,844 V360 M330,440 h-7 M330,560 h6"/>
+  </g>
+  <!-- sakura tree hint -->
+  <g fill="#F2B8C2" opacity=".28">
+    <circle cx="90" cy="300" r="18"/><circle cx="112" cy="288" r="14"/><circle cx="70" cy="285" r="12"/><circle cx="100" cy="268" r="11"/>
+  </g>
+  <!-- koi pond oval -->
+  <ellipse cx="195" cy="720" rx="110" ry="36" fill="#C5D8D4" opacity=".35"/>
+  <ellipse cx="195" cy="720" rx="70" ry="20" fill="#B7CEC9" opacity=".25"/>
+  <!-- drifting petal hints -->
+  <g fill="#F8DDE2" opacity=".4">
+    <ellipse cx="140" cy="200" rx="5" ry="3" transform="rotate(-20 140 200)"/>
+    <ellipse cx="260" cy="160" rx="4" ry="2.5" transform="rotate(30 260 160)"/>
+    <ellipse cx="300" cy="240" rx="5" ry="3" transform="rotate(-10 300 240)"/>
+  </g>
+</svg>

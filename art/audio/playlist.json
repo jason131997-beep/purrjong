@@ -1,0 +1,65 @@
+{
+  "targetLufs": -17.0,
+  "tracks": [
+    {
+      "id": "theme",
+      "name": "Tea Garden Shelf",
+      "file": "art/audio/theme.m4a",
+      "pad": 0.5,
+      "loop": 91.428571,
+      "bpm": 84,
+      "bars": 32,
+      "lufs": -16.9
+    },
+    {
+      "id": "garden",
+      "name": "Morning Garden",
+      "file": "art/audio/garden.m4a",
+      "pad": 0.5,
+      "loop": 80.0,
+      "bpm": 96,
+      "bars": 32,
+      "lufs": -17.0
+    },
+    {
+      "id": "teahouse",
+      "name": "Tea House Steam",
+      "file": "art/audio/teahouse.m4a",
+      "pad": 0.5,
+      "loop": 87.272721,
+      "bpm": 66,
+      "bars": 24,
+      "lufs": -17.1
+    },
+    {
+      "id": "nightmarket",
+      "name": "Lantern Night Market",
+      "file": "art/audio/nightmarket.m4a",
+      "pad": 0.5,
+      "loop": 87.272721,
+      "bpm": 88,
+      "bars": 32,
+      "lufs": -17.0
+    },
+    {
+      "id": "festival",
+      "name": "Festival Steps",
+      "file": "art/audio/festival.m4a",
+      "pad": 0.5,
+      "loop": 88.888889,
+      "bpm": 108,
+      "bars": 40,
+      "lufs": -17.0
+    },
+    {
+      "id": "rain",
+      "name": "Rain on the Eaves",
+      "file": "art/audio/rain.m4a",
+      "pad": 0.5,
+      "loop": 88.0,
+      "bpm": 60,
+      "bars": 22,
+      "lufs": -17.0
+    }
+  ]
+}

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#F6F0E4">
+<meta name="description" content="Purrjong — cozy cat mahjong solitaire. Send kitties to the shelf and match pairs across hand-built boards. No timers, no pressure.">
+<title>Purrjong: Cat Mahjong Puzzle</title>
+<link rel="icon" href="art/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" sizes="180x180" href="art/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Purrjong">
+<meta name="purrjong-version" content="4.2.1-202610062311">
+<link rel="stylesheet" href="src/tile.css?v=4.2.1-202610062311">
+<link rel="stylesheet" href="src/app.css?v=4.2.1-202610062311">
+</head>
+<body>
+<div class="scene" id="scene" aria-hidden="true"></div>
+<div class="ambience" id="ambience" aria-hidden="true"></div>
+<div class="app" id="app">
+
+  <!-- HOME / BOARD SELECT -->
+  <section class="screen" id="home" hidden>
+    <header class="home-head">
+      <div class="logo" aria-label="Purrjong">
+        <img class="logo-mark" src="art/favicon.svg" alt="">
+        <div class="logo-text"><span>Purr</span><b>jong</b></div>
+      </div>
+      <div class="purse" id="purseHome"></div>
+    </header>
+    <p class="home-sub" id="homeSub">Chapter 1 · Tea Garden</p>
+    <button class="daily-card" id="btnDaily" hidden>
+      <div class="daily-seal">Daily</div>
+      <div class="daily-body">
+        <strong id="dailyLabel">Today's puzzle</strong>
+        <span id="dailyMeta">Unlocks after board 5</span>
+      </div>
+      <span class="daily-go">Play</span>
+    </button>
+    <div class="board-grid" id="boardGrid"></div>
+    <div class="home-actions">
+      <button class="pill" id="btnAlbum">Album <span id="albumCount"></span></button>
+      <button class="pill ghost" id="btnSettingsHome">Settings</button>
+    </div>
+  </section>
+
+  <!-- ALBUM -->
+  <section class="screen" id="album" hidden>
+    <header class="topbar">
+      <button class="icon-btn" id="btnAlbumBack" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7"/></svg></button>
+      <div class="title">Album <small id="albumMet"></small></div>
+      <span class="icon-btn spacer"></span>
+    </header>
+    <div class="album-scroll" id="albumList"></div>
+  </section>
+
+  <!-- PLAY -->
+  <section class="screen" id="play" hidden>
+    <header class="topbar">
+      <button class="icon-btn" id="btnHome" aria-label="Home"><svg viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5M6.5 10v8.5h11V10"/></svg></button>
+      <div class="title" id="boardLabel">Board 1</div>
+      <button class="icon-btn" id="btnSettings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></button>
+    </header>
+    <div class="progress">
+      <span class="timer" id="timer" role="timer" aria-label="Board time">0:00</span>
+      <svg viewBox="0 0 300 12" preserveAspectRatio="none" aria-hidden="true"><path class="track" d="M4,7 C60,4 120,8 180,6 S260,5 296,6"/><path class="ink" id="progressInk" d="M4,7 C60,4 120,8 180,6 S260,5 296,6" pathLength="100"/></svg>
+      <span id="tilesLeft">0 left</span>
+    </div>
+    <div class="shelf-wrap" id="shelfWrap">
+      <div class="shelf" id="shelf" aria-label="Shelf">
+        <span class="shelf-cap l" aria-hidden="true"></span>
+        <div class="slots" id="slots"><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div></div>
+        <span class="shelf-cap r" aria-hidden="true"></span>
+      </div>
+    </div>
+    <div class="board-wrap" id="boardWrap">
+      <div class="tip" id="tip"></div>
+      <div id="board" role="application" aria-label="Board"></div>
+      <div class="fx" id="fx"></div>
+      <div class="coach" id="coach" hidden>
+        <div class="paw" id="coachPaw" aria-hidden="true">
+          <svg viewBox="0 0 48 48"><ellipse cx="24" cy="30" rx="10" ry="8.5"/><circle cx="10" cy="18" r="4.5"/><circle cx="18" cy="11" r="4.5"/><circle cx="30" cy="11" r="4.5"/><circle cx="38" cy="18" r="4.5"/></svg>
+        </div>
+        <div class="coach-ring" id="coachRing"></div>
+      </div>
+    </div>
+    <button class="finish" id="btnFinish" hidden>Finish ✓</button>
+    <nav class="tray">
+      <button class="seal" id="btnUndo" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M9 7 4.5 11.5 9 16"/><path d="M5 11.5h9a5 5 0 0 1 0 10h-2"/></svg><span>Undo</span><i class="badge" id="undoBadge">3</i></button>
+      <button class="seal" id="btnHint" aria-label="Hint"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="15" rx="4.2" ry="3.6"/><circle cx="6.2" cy="9.6" r="1.9"/><circle cx="9.8" cy="6.4" r="1.9"/><circle cx="14.2" cy="6.4" r="1.9"/><circle cx="17.8" cy="9.6" r="1.9"/></svg><span>Hint</span><i class="badge" id="hintBadge">1</i></button>
+      <button class="seal" id="btnShuffle" aria-label="Shuffle"><svg viewBox="0 0 24 24"><path d="M4 7h3.5c4 0 5 10 9 10H20M17 14l3 3-3 3M4 17h3.5c1.6 0 2.6-1.6 3.4-3.4M13.1 9.4C13.9 8 14.9 7 16.5 7H20M17 4l3 3-3 3"/></svg><span>Shuffle</span><i class="badge" id="shuffleBadge">1</i></button>
+    </nav>
+  </section>
+
+  <!-- flying / shelf tiles, particles, combo text (above the board, below sheets) -->
+  <div class="fly" id="fly" aria-hidden="true"><div class="combo" id="combo"></div></div>
+
+  <!-- tray-full sheet (soft fail) -->
+  <div class="scrim" id="deadScrim" hidden></div>
+  <div class="sheet" id="deadSheet" hidden>
+    <div class="grab"></div>
+    <img class="sheet-cat" src="art/cats/blue.svg" alt="">
+    <h3 id="deadTitle">Out of space!</h3>
+    <p id="deadText">All 4 slots filled without a pair.</p>
+    <div class="sheet-actions col">
+      <button class="pill big" id="deadRevive">Revive (Free)</button>
+      <small class="sheet-note" id="deadNote">Free once per board</small>
+      <div class="sheet-actions">
+        <button class="pill ghost" id="deadRetry">Retry board</button>
+        <button class="pill ghost" id="deadHome">Home</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- settings sheet -->
+  <div class="scrim" id="setScrim" hidden></div>
+  <div class="sheet" id="setSheet" hidden>
+    <div class="grab"></div>
+    <h3>Settings</h3>
+    <label class="row"><span>Show blocked tiles<small id="optBlockedNote">Off by default from board 6: harder</small></span><input type="checkbox" id="optBlocked"></label>
+    <label class="row"><span>Helper marks (suit + number)</span><input type="checkbox" id="optMarks"></label>
+    <div class="row audio-row"><label class="tog"><span>Music</span><input type="checkbox" id="optMusic"></label><input type="range" id="volMusic" min="0" max="100" step="1" aria-label="Music volume"></div>
+    <label class="row track-row"><span>Track<small id="optTrackNote">A new track each level</small></span><select id="optTrack" aria-label="Music track"></select></label>
+    <div class="row audio-row"><label class="tog"><span>Sound</span><input type="checkbox" id="optSound"></label><input type="range" id="volSound" min="0" max="100" step="1" aria-label="Sound volume"></div>
+    <label class="row"><span>Haptics<small id="optHapticsNote">Taps, matches and a full shelf</small></span><input type="checkbox" id="optHaptics"></label>
+    <label class="row"><span>Reduce motion</span><input type="checkbox" id="optMotion"></label>
+    <div class="sheet-actions">
+      <button class="pill ghost" id="optRestart">Restart board</button>
+      <button class="pill ghost" id="optReset">Reset progress</button>
+      <button class="pill" id="optClose">Done</button>
+    </div>
+  </div>
+
+  <!-- win -->
+  <div class="win" id="win" hidden>
+    <div class="petals" id="petals"></div>
+    <div class="win-card">
+      <div class="mat"><img src="art/cats/sleepy.svg" alt=""></div>
+      <div class="seal-stamp" id="sealStamp"><span>Cleared</span></div>
+      <h2 id="winTitle">Board 1</h2>
+      <div class="win-stars" id="winStars" aria-label="stars"></div>
+      <div class="parade" id="parade" aria-hidden="true"></div>
+      <div class="win-time" id="winTime"></div>
+      <small class="win-stars-note" id="winStarsNote"></small>
+      <p id="winText"></p>
+      <button class="pill big" id="btnNext">Next</button>
+      <button class="link" id="btnWinHome">Boards</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="data/data.js?v=4.2.1-202610062311"></script>
+<script src="src/core.js?v=4.2.1-202610062311"></script>
+<script src="src/audio.js?v=4.2.1-202610062311"></script>
+<script src="src/haptics.js?v=4.2.1-202610062311"></script>
+<script src="src/app.js?v=4.2.1-202610062311"></script>
+</body>
+</html>

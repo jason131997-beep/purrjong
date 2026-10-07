@@ -1,0 +1,36 @@
+/* Purrjong tile skin (Section 4): 3:4 ivory face, 10% radius, 1px ink keyline @30%,
+   two-band side drawn down-right (ivory band over jade band, each ~3pt at 44pt), one soft shadow.
+   Size via --tw (tile width). */
+.tile {
+  --tw: 48px;
+  --b: calc(var(--tw) * 0.026);
+  position: relative;
+  width: var(--tw);
+  height: calc(var(--tw) * 4 / 3);
+  border-radius: calc(var(--tw) * 0.1);
+  background: #FFFBF2;
+  box-shadow:
+    inset 0 0 0 1px rgba(43, 42, 40, 0.3),
+    var(--b) var(--b) 0 0 #EDE1C6,
+    calc(var(--b) * 2) calc(var(--b) * 2) 0 0 #E3D4B4,
+    calc(var(--b) * 3) calc(var(--b) * 3) 0 0 #4E8A75,
+    calc(var(--b) * 4) calc(var(--b) * 4) 0 0 #3F7563,
+    calc(var(--b) * 4 + 1px) calc(var(--b) * 4 + 3px) 6px 0 rgba(43, 42, 40, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+.tile img, .tile .art {
+  width: 94%;
+  height: auto;
+  aspect-ratio: 1;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.tile.bonus {
+  outline: calc(var(--tw) * 0.035) solid #C9A44C;
+  outline-offset: calc(var(--tw) * -0.075);
+}
