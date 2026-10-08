@@ -12,9 +12,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Purrjong">
-<meta name="purrjong-version" content="5.0.0-202610071935">
-<link rel="stylesheet" href="src/tile.css?v=5.0.0-202610071935">
-<link rel="stylesheet" href="src/app.css?v=5.0.0-202610071935">
+<meta name="purrjong-version" content="5.1.0-202610072053">
+<link rel="stylesheet" href="src/tile.css?v=5.1.0-202610072053">
+<link rel="stylesheet" href="src/app.css?v=5.1.0-202610072053">
 </head>
 <body>
 <div class="scene" id="scene" aria-hidden="true"></div>
@@ -28,7 +28,7 @@
         <img class="logo-mark" src="art/favicon.svg" alt="">
         <div class="logo-text"><span>Purr</span><b>jong</b></div>
       </div>
-      <div class="purse" id="purseHome"></div>
+      <div class="home-tools"><div class="purse" id="purseHome"></div><button class="icon-btn help-btn" id="btnHelp" aria-label="How to play">?</button></div>
     </header>
     <p class="home-sub" id="homeSub">Chapter 1 · Tea Garden</p>
     <div class="home-scroll" id="homeScroll">
@@ -123,6 +123,8 @@
     <div class="row audio-row"><label class="tog"><span>Sound</span><input type="checkbox" id="optSound"></label><input type="range" id="volSound" min="0" max="100" step="1" aria-label="Sound volume"></div>
     <label class="row"><span>Haptics<small id="optHapticsNote">Taps, matches and a full shelf</small></span><input type="checkbox" id="optHaptics"></label>
     <label class="row"><span>Reduce motion</span><input type="checkbox" id="optMotion"></label>
+    <button class="row row-btn" id="optHowto"><span>How to Play<small>The rules, the shelf and your helpers</small></span><i aria-hidden="true">›</i></button>
+    <button class="row row-btn" id="optResetTips"><span>Reset tips<small>Show the one-time tip cards again</small></span><i aria-hidden="true">↺</i></button>
     <div class="sheet-actions">
       <button class="pill ghost" id="optRestart">Restart board</button>
       <button class="pill ghost" id="optReset">Reset progress</button>
@@ -148,14 +150,31 @@
     </div>
   </div>
 
+  <!-- one-time contextual tip card (input blocked behind it, timer paused; placed away from the tiles it is about) -->
+  <div class="tip-block" id="tipBlock" hidden></div>
+  <div class="tipcard" id="tipCard" hidden role="dialog" aria-labelledby="tipCardTitle" aria-describedby="tipCardText">
+    <img class="tipcard-cat" src="art/favicon.svg" alt="">
+    <div class="tipcard-body"><b id="tipCardTitle"></b><p id="tipCardText"></p><div class="tipcard-art" id="tipCardArt"></div></div>
+    <button class="pill tipcard-ok" id="tipCardOk">Got it</button>
+  </div>
+
+  <!-- How to Play intro (first launch, '?' on home, Settings) -->
+  <div class="howto" id="howto" hidden role="dialog" aria-modal="true" aria-label="How to play">
+    <div class="howto-card">
+      <div class="howto-head"><span>How to play</span><button class="howto-skip" id="howtoSkip">Skip</button></div>
+      <div class="howto-track" id="howtoTrack"></div>
+      <div class="howto-foot"><div class="howto-dots" id="howtoDots"></div><button class="pill" id="howtoNext">Next</button></div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 </div>
 
-<script src="data/data.js?v=5.0.0-202610071935"></script>
-<script src="src/core.js?v=5.0.0-202610071935"></script>
-<script src="src/rares.js?v=5.0.0-202610071935"></script>
-<script src="src/audio.js?v=5.0.0-202610071935"></script>
-<script src="src/haptics.js?v=5.0.0-202610071935"></script>
-<script src="src/app.js?v=5.0.0-202610071935"></script>
+<script src="data/data.js?v=5.1.0-202610072053"></script>
+<script src="src/core.js?v=5.1.0-202610072053"></script>
+<script src="src/rares.js?v=5.1.0-202610072053"></script>
+<script src="src/audio.js?v=5.1.0-202610072053"></script>
+<script src="src/haptics.js?v=5.1.0-202610072053"></script>
+<script src="src/app.js?v=5.1.0-202610072053"></script>
 </body>
 </html>
