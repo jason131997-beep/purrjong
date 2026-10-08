@@ -15,9 +15,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Purrjong">
-<meta name="purrjong-version" content="5.2.0-202610072205">
-<link rel="stylesheet" href="src/tile.css?v=5.2.0-202610072205">
-<link rel="stylesheet" href="src/app.css?v=5.2.0-202610072205">
+<meta name="purrjong-version" content="5.3.0-202610072238">
+<link rel="stylesheet" href="src/tile.css?v=5.3.0-202610072238">
+<link rel="stylesheet" href="src/app.css?v=5.3.0-202610072238">
 </head>
 <body>
 <div class="scene" id="scene" aria-hidden="true"></div>
@@ -27,7 +27,7 @@
   <!-- HOME / BOARD SELECT -->
   <section class="screen" id="home" hidden>
     <header class="home-head">
-      <div class="home-tools"><button class="purse" id="purseHome" aria-label="Your fish: what they are for"></button><button class="icon-btn help-btn" id="btnHelp" aria-label="How to play">?</button></div>
+      <div class="home-tools"><button class="icon-btn shop-btn" id="btnShop" aria-label="Shop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 8.5h13l-1 11.5h-11z"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/></svg></button><button class="purse" id="purseHome" aria-label="Your fish: what they are for"></button><button class="icon-btn help-btn" id="btnHelp" aria-label="How to play">?</button></div>
     </header>
     <div class="home-scroll" id="homeScroll">
     <section class="hero" id="hero">
@@ -113,6 +113,7 @@
     <p id="deadText">All 4 slots filled without a pair.</p>
     <div class="sheet-actions col">
       <button class="pill big" id="deadRevive">Revive (Free)</button>
+      <button class="pill ad-pill" id="deadAd" hidden><i class="ad-play" aria-hidden="true">▶</i> Watch ad to Revive</button>
       <small class="sheet-note" id="deadNote">Free once per board</small>
       <div class="sheet-actions">
         <button class="pill ghost" id="deadRetry">Retry board</button>
@@ -135,6 +136,13 @@
     <label class="row"><span>Reduce motion</span><input type="checkbox" id="optMotion"></label>
     <button class="row row-btn" id="optHowto"><span>How to Play<small>The rules, the shelf and your helpers</small></span><i aria-hidden="true">›</i></button>
     <button class="row row-btn" id="optResetTips"><span>Reset tips<small>Show the one-time tip cards again</small></span><i aria-hidden="true">↺</i></button>
+    <button class="row row-btn" id="optShop"><span>Shop<small>Remove Ads, fish packs, Restore Purchases</small></span><i aria-hidden="true">›</i></button>
+    <div class="dev-box" id="devBox">
+      <h4>Developer: ad test mode</h4>
+      <p class="dev-status" id="devStatus"></p>
+      <label class="row"><span>Fast test rules<small>30 s instead of 3 min, any board, first session OK</small></span><input type="checkbox" id="optAdFast"></label>
+      <div class="dev-btns"><button class="pill ghost small" id="devInter">Force interstitial</button><button class="pill ghost small" id="devReward">Force rewarded</button><button class="pill ghost small" id="devResetBuys">Reset purchases</button></div>
+    </div>
     <div class="sheet-actions">
       <button class="pill ghost" id="optRestart">Restart board</button>
       <button class="pill ghost" id="optReset">Reset progress</button>
@@ -148,11 +156,36 @@
     <div class="grab"></div>
     <div class="fish-head"><span class="fish-coin" aria-hidden="true">🐟</span><div><h3 id="fishTitle">Fish</h3><p class="fish-bal">You have <b id="fishBal">0</b> fish</p></div></div>
     <p class="fish-what">Fish are your treats. Earn them by clearing boards, then spend them on extra help when the free helpers run out.</p>
+    <button class="fish-free" id="fishAd"><i class="ad-play" aria-hidden="true">▶</i><span><b id="fishAdTitle">Free fish</b><small id="fishAdNote"></small></span><span class="fish-amt" id="fishAdAmt">🐟 +20</span></button>
     <h4 class="fish-h">Earn</h4>
     <ul class="fish-list" id="fishEarn"></ul>
     <h4 class="fish-h">Spend</h4>
     <ul class="fish-list" id="fishSpend"></ul>
-    <div class="sheet-actions"><button class="pill" id="fishClose">Got it</button></div>
+    <div class="sheet-actions"><button class="pill ghost" id="fishShop">Shop</button><button class="pill" id="fishClose">Got it</button></div>
+  </div>
+
+  <!-- out of free hints / shuffles: watch an ad, spend fish, or not now -->
+  <div class="scrim offer-scrim" id="offerScrim" hidden></div>
+  <div class="sheet offer-sheet" id="offerSheet" hidden role="dialog" aria-modal="true" aria-labelledby="offerTitle">
+    <div class="grab"></div>
+    <h3 id="offerTitle">Out of free hints</h3>
+    <p id="offerText">Get one more:</p>
+    <div class="sheet-actions col">
+      <button class="pill big ad-pill" id="offerAd"><i class="ad-play" aria-hidden="true">▶</i> <span id="offerAdText">Watch ad for a free hint</span></button>
+      <small class="sheet-note" id="offerAdNote"></small>
+      <button class="pill" id="offerFish">Use 60 fish</button>
+      <button class="link" id="offerCancel">Not now</button>
+    </div>
+  </div>
+
+  <!-- shop -->
+  <div class="scrim store-scrim" id="storeScrim" hidden></div>
+  <div class="sheet store-sheet" id="storeSheet" hidden role="dialog" aria-modal="true" aria-labelledby="storeTitle">
+    <div class="grab"></div>
+    <div class="store-head"><h3 id="storeTitle">Shop</h3><span class="store-test">Test store · no real charges</span></div>
+    <div class="store-list" id="storeList"></div>
+    <div class="sheet-actions"><button class="link" id="storeRestore">Restore Purchases</button><button class="pill" id="storeClose">Done</button></div>
+    <small class="store-fine">Placeholder prices for testing. The App Store app shows Apple's purchase sheet and real local prices.</small>
   </div>
 
   <!-- win -->
@@ -168,6 +201,7 @@
       <div class="win-new" id="winNew" hidden></div>
       <small class="win-stars-note" id="winStarsNote"></small>
       <p id="winText"></p>
+      <button class="pill ad-pill win-double" id="winDouble" hidden><i class="ad-play" aria-hidden="true">▶</i> <span id="winDoubleText">Double your fish</span></button>
       <div class="win-fish" id="winFish" hidden><span class="win-fish-ico" aria-hidden="true">🐟</span><span><b>Your first fish!</b> Fish buy extra hints, shuffles, undos and revives.</span><button class="win-fish-more" id="winFishMore">What are fish?</button></div>
       <button class="pill big" id="btnNext">Next</button>
       <button class="link" id="btnWinHome">Boards</button>
@@ -194,11 +228,12 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<script src="data/data.js?v=5.2.0-202610072205"></script>
-<script src="src/core.js?v=5.2.0-202610072205"></script>
-<script src="src/rares.js?v=5.2.0-202610072205"></script>
-<script src="src/audio.js?v=5.2.0-202610072205"></script>
-<script src="src/haptics.js?v=5.2.0-202610072205"></script>
-<script src="src/app.js?v=5.2.0-202610072205"></script>
+<script src="data/data.js?v=5.3.0-202610072238"></script>
+<script src="src/core.js?v=5.3.0-202610072238"></script>
+<script src="src/rares.js?v=5.3.0-202610072238"></script>
+<script src="src/audio.js?v=5.3.0-202610072238"></script>
+<script src="src/haptics.js?v=5.3.0-202610072238"></script>
+<script src="src/monetize.js?v=5.3.0-202610072238"></script>
+<script src="src/app.js?v=5.3.0-202610072238"></script>
 </body>
 </html>

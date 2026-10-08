@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "note": "All monetization knobs live here. Prices are TEST placeholders: the native app shows the App Store's real local price. Web build: mock providers only (no ad network, no payments, no tracking).",
+  "testMode": true,
+  "session": { "gapMinutes": 30 },
+  "interstitial": {
+    "enabled": true,
+    "minPlaySecondsSinceAd": 180,
+    "minBoardsBetween": 2,
+    "noAdsInFirstSessions": 1,
+    "minBoard": 7,
+    "skipAfterRewardedSeconds": 180,
+    "placements": ["board_end"]
+  },
+  "devFastRules": { "minPlaySecondsSinceAd": 30, "minBoardsBetween": 1, "noAdsInFirstSessions": 0, "minBoard": 1, "skipAfterRewardedSeconds": 30 },
+  "rewarded": {
+    "dailyCap": 15,
+    "placements": {
+      "revive": { "perDay": 5, "label": "Watch ad to Revive" },
+      "hint": { "perDay": 5, "label": "Watch ad for a free hint" },
+      "shuffle": { "perDay": 5, "label": "Watch ad for a free shuffle" },
+      "doubleFish": { "perDay": 5, "multiplier": 2, "label": "Double your fish" },
+      "freeFish": { "perDay": 3, "fish": 20, "label": "Free fish" }
+    }
+  },
+  "mock": { "interstitialCloseAfterSeconds": 5, "rewardedSeconds": 5, "storeLedgerKey": "purrjong.mockstore" },
+  "products": [
+    { "id": "com.purrjong.starterpack", "key": "starter", "type": "nonConsumable", "name": "Starter Pack", "price": "$4.99", "priceUSD": 4.99,
+      "blurb": "Remove Ads + 1,000 fish + a guaranteed rare cat", "grants": { "adFree": true, "fish": 1000, "rareCat": 1 }, "tag": "One-time offer" },
+    { "id": "com.purrjong.removeads", "key": "removeAds", "type": "nonConsumable", "name": "Remove Ads", "price": "$3.99", "priceUSD": 3.99,
+      "blurb": "No more ads between boards. Watch-for-reward stays optional.", "grants": { "adFree": true } },
+    { "id": "com.purrjong.fish.200", "key": "fish200", "type": "consumable", "name": "Bowl of fish", "price": "$0.99", "priceUSD": 0.99, "grants": { "fish": 200 } },
+    { "id": "com.purrjong.fish.1200", "key": "fish1200", "type": "consumable", "name": "Bucket of fish", "price": "$4.99", "priceUSD": 4.99, "grants": { "fish": 1200 }, "tag": "Most popular" },
+    { "id": "com.purrjong.fish.3000", "key": "fish3000", "type": "consumable", "name": "Boat of fish", "price": "$9.99", "priceUSD": 9.99, "grants": { "fish": 3000 }, "tag": "Best value" }
+  ]
+}

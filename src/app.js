@@ -9,6 +9,7 @@
   const CATS = Object.fromEntries(D.cats.cats.map((c) => [c.id, c]));
   const SUIT_LETTER = { garden: 'G', teahouse: 'T', nightmarket: 'N', festival: 'F', grove: 'B', pond: 'K', blossom: 'H', snowy: 'Y', moonlit: 'M' };
   const RS = window.PurrRares;
+  const MZ = window.PurrMonetize, MCFG = D.monetize || { interstitial: { enabled: false }, rewarded: { placements: {} }, products: [] };
   // v5 chapters: boards 1-30 become chapters 1-3 (their old scenes); chapters 4-8 are boards 31-80.
   const CHAPTERS = D.boards.chapters || [{ n: 1, id: 'garden', name: 'Tea Garden', scene: 'garden', from: 1, to: BOARDS.length, newCats: [] }];
   const chapterOf = (id) => CHAPTERS.find((c) => id >= c.from && id <= c.to) || CHAPTERS[0];
@@ -33,7 +34,7 @@
   const H = window.PurrHaptics || { fire() {}, set() {} };
 
   // ---------------------------------------------------------------- profile + save
-  const defaults = () => ({ v: PROFILE_VERSION, fish: 20, hints: 1, shuffles: 1, cleared: {}, stars: {}, best: {}, album: {}, daily: {}, rares: {}, rareState: { pity: 0, last: null }, tipsSeen: {}, howtoSeen: false, settings: { showBlocked: false, marks: false, motion: false, sound: true, music: true, sfxVol: 0.7, musicVol: 0.3, haptics: true, track: 'rotate', trackIdx: 0 }, current: null, coachDone: {} });
+  const defaults = () => ({ v: PROFILE_VERSION, fish: 20, hints: 1, shuffles: 1, cleared: {}, stars: {}, best: {}, album: {}, daily: {}, rares: {}, rareState: { pity: 0, last: null }, tipsSeen: {}, howtoSeen: false, monetize: MZ.freshState(), settings: { showBlocked: false, marks: false, motion: false, sound: true, music: true, sfxVol: 0.7, musicVol: 0.3, haptics: true, track: 'rotate', trackIdx: 0 }, current: null, coachDone: {} });
   let migratedNote = '';
   let P = (function load() {
     if (noSave) return defaults();
@@ -46,6 +47,7 @@
         // v5 (rare cats): new fields default safely on older saves; nothing else changes
         p.rares = p.rares || {}; p.rareState = Object.assign({ pity: 0, last: null }, p.rareState || {});
         p.tipsSeen = p.tipsSeen || {}; p.howtoSeen = !!p.howtoSeen; // v5.1 onboarding: older saves see the intro before board 1
+        p.monetize = MZ.normalize(s.monetize); // v5.3: purchases + ad pacing (older saves: nothing owned, fresh pacing)
         if ((s.v || 0) < 3) {
           // v3 retune: boards were re-dealt (old mid-board saves no longer fit) and help got scarce.
           p.hints = Math.min(p.hints, 1); p.shuffles = Math.min(p.shuffles, 1); p.fish = Math.min(p.fish, HELP_COST);
@@ -65,7 +67,15 @@
     } catch (e) { /* ignore */ }
     return defaults();
   })();
-  function save() { if (!noSave) try { localStorage.setItem(STORE, JSON.stringify(P)); } catch (e) { /* ignore */ } }
+  function save() { if (P.monetize) MZ.touch(P.monetize, Date.now()); if (!noSave) try { localStorage.setItem(STORE, JSON.stringify(P)); } catch (e) { /* ignore */ } }
+  // ---- v5.3 monetization (src/monetize.js, data/monetize.json): mock providers on the web, real SDKs natively
+  P.monetize = MZ.normalize(P.monetize);
+  MZ.startSession(P.monetize, MCFG, Date.now());
+  const MON = MZ.createMonetization({
+    config: MCFG, state: () => P.monetize, save: () => save(), noAds: params.has('noads'), speed: params.has('adfast') ? 0.06 : 1,
+    onAdStart: () => { clockTick(); try { A.stopMusic(true); } catch (e) { /* */ } },
+    onAdEnd: () => { clockTick(); try { if (P.settings.music) A.startMusic(); } catch (e) { /* */ } },
+  });
   /** Dimming blocked tiles makes boards much easier: tutorial boards only, or by choice. */
   function dimOn() {
     if (P.settings.showBlocked) return true;
@@ -341,6 +351,11 @@
     const force = params.get('rare');
     if (force) return RS.roll(board, game.faces, P.rareState, Math.random, { force });
     if (keep) return keep.rare; // Retry keeps this board's roll (no re-roll fishing, no lost rare)
+    if (P.monetize.pendingRare > 0 && RS.eligible(board)) { // Starter Pack: a guaranteed rare, one you don't have yet if possible
+      const pool = RS.ROSTER.rare.filter((id) => !((P.rares[id] || 0) > 0)), list = pool.length ? pool : RS.ROSTER.rare;
+      const got = RS.roll(board, game.faces, P.rareState, Math.random, { force: list[Math.floor(Math.random() * list.length)] });
+      if (got) { P.monetize.pendingRare--; RS.afterRoll(P.rareState, board, got); return got; }
+    }
     const got = RS.roll(board, game.faces, P.rareState, Math.random);
     RS.afterRoll(P.rareState, board, got);
     return got;
@@ -375,11 +390,11 @@
   };
   function clockRunning() {
     return !!(game && board && P.current && !$('play').hidden && !document.hidden && $('win').hidden
-      && $('deadSheet').hidden && $('setSheet').hidden && $('fishSheet').hidden && $('howto').hidden && $('tipCard').hidden && !game.isWon() && !game.over && (game.taps > 0 || P.current.ms > 0));
+      && $('deadSheet').hidden && $('setSheet').hidden && $('fishSheet').hidden && $('offerSheet').hidden && $('storeSheet').hidden && !MON.showing && $('howto').hidden && $('tipCard').hidden && !game.isWon() && !game.over && (game.taps > 0 || P.current.ms > 0));
   }
   function clockTick() {
     const now = performance.now(), run = clockRunning();
-    if (run && clockAt != null && P.current) P.current.ms = (P.current.ms || 0) + Math.min(1000, Math.max(0, now - clockAt));
+    if (run && clockAt != null && P.current) { const d = Math.min(1000, Math.max(0, now - clockAt)); P.current.ms = (P.current.ms || 0) + d; MZ.addPlay(P.monetize, d); }
     clockAt = run ? now : null;
     const el = $('timer');
     if (el && P.current) {
@@ -1030,6 +1045,38 @@
     return false;
   }
   function refund(kind) { P[kind]++; }
+  /** v5.3: out of free stock -> first time the fish card explains; after that a small sheet offers a rewarded ad
+   *  (free, opt-in, capped per day) or fish. Resolves true when the help may be used now. */
+  async function spendHelp(kind) {
+    if (P[kind] > 0) { P[kind]--; return true; }
+    if (tipCard('fish', { kind })) return false;
+    return offerHelp(kind);
+  }
+  function offerHelp(kind) {
+    const one = kind === 'hints' ? 'hint' : 'shuffle', placement = one;
+    const rs = MON.rewardedStatus(placement), canFish = P.fish >= HELP_COST;
+    if (!rs.ok && !canFish) { toast(kind === 'hints' ? 'No hints left. Undo sends the last cat home.' : 'No shuffles left. Try Undo or Retry.'); return Promise.resolve(false); }
+    return new Promise((resolve) => {
+      clockTick();
+      $('offerTitle').textContent = `Out of free ${one}s`;
+      $('offerText').textContent = rs.ok ? `Watch a short ad for a free ${one}, or use fish.` : `Use fish for one more ${one}.`;
+      $('offerAd').hidden = !rs.ok; $('offerAdNote').hidden = !rs.ok;
+      $('offerAdText').textContent = `Watch ad for a free ${one}`;
+      $('offerAdNote').textContent = `${rs.left} free ${rs.left === 1 ? one : one + 's'} by ad left today`;
+      $('offerFish').textContent = `Use ${HELP_COST} fish (you have ${P.fish})`; $('offerFish').disabled = !canFish;
+      $('offerScrim').hidden = false; $('offerSheet').hidden = false;
+      const done = (v) => { $('offerScrim').hidden = true; $('offerSheet').hidden = true; clockTick(); resolve(v); };
+      $('offerAd').onclick = async () => {
+        sfx('click'); $('offerScrim').hidden = true; $('offerSheet').hidden = true;
+        const r = await MON.showRewarded(placement);
+        if (r.rewarded) toast(`Free ${one}!`, 1600); else toast('No reward: the ad was closed early.', 2200);
+        done(!!r.rewarded);
+      };
+      $('offerFish').onclick = () => { sfx('click'); if (P.fish < HELP_COST) return; P.fish -= HELP_COST; toast(`−${HELP_COST} fish`); done(true); };
+      $('offerCancel').onclick = () => { sfx('click'); done(false); };
+      $('offerScrim').onclick = () => done(false);
+    });
+  }
   async function hint() {
     if (busy) return;
     await flush();
@@ -1043,7 +1090,7 @@
     if (!h) { showDead(); return; }
     // Truthful and free when it can't help: no winning line exists from here.
     if (h.safe === false) { toast('No winning line from here. Undo a few cats back (free undos first).', 3400); return; }
-    if (!spend('hints')) return;
+    if (!(await spendHelp('hints'))) return;
     P.current.usedHelp = true; persist();
     refresh();
     sfx('hint'); buzz('hint');
@@ -1080,7 +1127,7 @@
     if (game.remaining < 1) return;
     if (game.over) { showDead(); return; }
     await flush();
-    if (!spend('shuffles')) return;
+    if (!(await spendHelp('shuffles'))) return;
     clearHint();
     hideCoach(); if (coachStage === 1 || coachStage === 2) markCoachDone();
     if (!game.shuffle()) { refund('shuffles'); toast('No shuffle can fix this layout. Try Undo.'); refresh(); return; }
@@ -1102,6 +1149,17 @@
   }
 
   // ---------------------------------------------------------------- sheets
+  /** A board ended (won or lost) and the player tapped continue: maybe one interstitial (all rules in monetize.js). */
+  let continuing = false;
+  async function afterBoard(b, fn) {
+    if (continuing) return; continuing = true;
+    try {
+      const highest = Math.max(0, ...Object.keys(P.cleared).map(Number).filter((n) => n > 0 && P.cleared[n]));
+      if (b) await MON.atBoardEnd({ boardId: b.isDaily ? 'daily' : b.boardId, highestCleared: highest });
+    } catch (e) { /* an ad failure never blocks play */ }
+    continuing = false;
+    fn();
+  }
   function reviveFree() { return !game || game.revives === 0; }
   function showDead() {
     if (!game || !game.isStuck() || busy) { if (game && game.isStuck() && busy) setTimeout(showDead, 200); return; }
@@ -1114,12 +1172,14 @@
     r.textContent = free ? 'Revive (Free)' : `Revive · ${REVIVE_COST} fish`;
     r.disabled = !free && P.fish < REVIVE_COST;
     $('deadNote').textContent = free ? 'Free once per board' : `You have ${P.fish} fish`;
+    const ra = MON.rewardedStatus('revive');
+    $('deadAd').hidden = free || !ra.ok; // opt-in rewarded revive, offered once the free revive is used up
     tipCard('revive');
   }
   /** Revive: every shelf cat flies back to its exact board spot (reverse flight), then play continues. */
-  async function revive() {
+  async function revive(opts) {
     if (busy || !game || !game.over) return;
-    const free = reviveFree();
+    const free = reviveFree() || !!(opts && opts.ad);
     if (!free) {
       if (P.fish < REVIVE_COST) { toast(`Revive costs ${REVIVE_COST} fish.`); return; }
       P.fish -= REVIVE_COST; toast(`−${REVIVE_COST} fish`);
@@ -1154,6 +1214,7 @@
   function hideSheets() { clockTick(); for (const id of ['deadScrim', 'deadSheet', 'setScrim', 'setSheet']) $(id).hidden = true; clockTick(); }
 
   // ---------------------------------------------------------------- win
+  let lastWin = null;
   function win() {
     if (!game || !game.isWon() || !$('win').hidden) return;
     const first = !P.cleared[board.boardId];
@@ -1183,6 +1244,10 @@
     // first fish ever earned: a one-time callout on the win card, with a link to the fish sheet
     const firstFish = !noTips && !(P.tipsSeen = P.tipsSeen || {}).fishEarned;
     $('winFish').hidden = !firstFish;
+    lastWin = { awarded, doubled: false };
+    const dr = MON.rewardedStatus('doubleFish'), mult = (MCFG.rewarded.placements.doubleFish || {}).multiplier || 2;
+    $('winDouble').hidden = !dr.ok || awarded <= 0;
+    $('winDoubleText').textContent = `Double your fish: +${awarded * (mult - 1)} more`;
     if (firstFish) { P.tipsSeen.fishEarned = true; save(); }
     $('winStars').innerHTML = '<b>' + '<i>★</i>'.repeat(stars) + '</b>' + '<i>☆</i>'.repeat(3 - stars);
     $('winStars').setAttribute('aria-label', `${stars} of 3 stars`);
@@ -1266,26 +1331,43 @@
   $('btnShuffle').addEventListener('click', shuffle);
   $('btnFinish').addEventListener('click', click(finish));
   $('deadRevive').addEventListener('click', () => { sfx('click'); revive(); });
-  $('deadRetry').addEventListener('click', click(() => { hideSheets(); startBoard(board.boardId, { restart: true }); }));
-  $('deadHome').addEventListener('click', click(() => { hideSheets(); board = null; resetFly(); applySettings(); renderHome(); show('home'); }));
+  $('deadRetry').addEventListener('click', click(() => { const b = board; hideSheets(); afterBoard(b, () => startBoard(b.boardId, { restart: true })); }));
+  $('deadHome').addEventListener('click', click(() => { const b = board; hideSheets(); afterBoard(b, () => { board = null; resetFly(); applySettings(); renderHome(); show('home'); }); }));
+  $('deadAd').addEventListener('click', click(async () => {
+    if (busy || !game || !game.over) return;
+    const r = await MON.showRewarded('revive');
+    if (r.rewarded) revive({ ad: true }); else { toast('No reward: the ad was closed early.', 2200); showDead(); }
+  }));
   // the game-over sheet can't be dismissed by tapping outside it (that left a locked board with no way out)
   $('deadScrim').addEventListener('click', () => { if (!game || !game.over) hideSheets(); });
   $('btnHome').addEventListener('click', click(() => { clearHint(); hideCoach(); hideTip(); board = null; resetFly(); applySettings(); renderHome(); show('home'); }));
   $('btnNext').addEventListener('click', click(() => {
+    const b = board;
     $('win').hidden = true;
-    if (board && board.isDaily) { renderHome(); show('home'); return; }
-    if (board.boardId < BOARDS.length) startBoard(board.boardId + 1);
-    else { renderHome(); show('home'); }
+    afterBoard(b, () => {
+      if (b && b.isDaily) { renderHome(); show('home'); return; }
+      if (b.boardId < BOARDS.length) startBoard(b.boardId + 1);
+      else { renderHome(); show('home'); }
+    });
+  }));
+  $('winDouble').addEventListener('click', click(async () => {
+    if (!lastWin || lastWin.doubled) return;
+    const r = await MON.showRewarded('doubleFish');
+    if (!r.rewarded) { toast('No reward: the ad was closed early.', 2200); return; }
+    const mult = (MCFG.rewarded.placements.doubleFish || {}).multiplier || 2, extra = lastWin.awarded * (mult - 1);
+    P.fish += extra; lastWin.doubled = true; save();
+    $('winText').textContent = $('winText').textContent.replace(`+${lastWin.awarded} fish`, `+${lastWin.awarded * mult} fish (doubled!)`);
+    $('winDouble').hidden = true; refresh(); toast(`+${extra} fish!`, 1800); sfx('star', 3);
   }));
   $('btnPlay').addEventListener('click', click(() => {
     const t = homeTarget();
     if (t.daily) startBoard('daily', { daily: true }); else startBoard(t.id);
   }));
   if ($('btnDaily')) $('btnDaily').addEventListener('click', click(() => startBoard('daily', { daily: true, restart: true })));
-  $('btnWinHome').addEventListener('click', click(() => { $('win').hidden = true; renderHome(); show('home'); }));
+  $('btnWinHome').addEventListener('click', click(() => { const b = board; $('win').hidden = true; afterBoard(b, () => { renderHome(); show('home'); }); }));
   $('btnAlbum').addEventListener('click', click(() => { renderAlbum(); show('album'); }));
   $('btnAlbumBack').addEventListener('click', click(() => { renderHome(); show('home'); }));
-  const openSettings = () => { clockTick(); applySettings(); $('setScrim').hidden = false; $('setSheet').hidden = false; $('optRestart').hidden = !game || $('play').hidden; };
+  const openSettings = () => { clockTick(); applySettings(); $('setScrim').hidden = false; $('setSheet').hidden = false; $('optRestart').hidden = !game || $('play').hidden; if (!$('devBox').hidden) devStatus(); };
   $('btnSettings').addEventListener('click', click(openSettings));
   $('btnSettingsHome').addEventListener('click', click(openSettings));
   $('setScrim').addEventListener('click', hideSheets);
@@ -1506,6 +1588,11 @@
       ['Undo', `<small>${UNDO_FREE} free per board${P.current && !$('play').hidden ? ` (${uf} left here)` : ''}, then</small>`, UNDO_COST],
       ['Revive', '<small>first one free on each board, then</small>', REVIVE_COST],
     ].map(([a, note, c]) => `<li><span>${a}${note}</span>${chip('🐟 ' + c)}</li>`).join('');
+    const ff = MCFG.rewarded.placements.freeFish || { fish: 20, perDay: 3 }, fr = MON.rewardedStatus('freeFish');
+    $('fishAdAmt').textContent = `🐟 +${ff.fish}`;
+    $('fishAdTitle').textContent = 'Free fish: watch a short ad';
+    $('fishAdNote').textContent = fr.ok ? `${fr.left} of ${ff.perDay} left today` : 'All used today. More tomorrow!';
+    $('fishAd').disabled = !fr.ok;
     $('fishScrim').hidden = false; $('fishSheet').hidden = false;
     clockTick();
     sfx('tap');
@@ -1515,6 +1602,76 @@
   $('pursePlay').addEventListener('click', click(() => { if (!$('tipCard').hidden) return; openFish(); }));
   $('winFishMore').addEventListener('click', click(openFish));
   $('fishClose').addEventListener('click', click(closeFish));
+  $('fishAd').addEventListener('click', click(async () => {
+    const ff = MCFG.rewarded.placements.freeFish || { fish: 20 };
+    const r = await MON.showRewarded('freeFish');
+    if (r.rewarded) { P.fish += ff.fish; save(); toast(`+${ff.fish} fish!`, 1800); sfx('star', 3); } else if (!r.capped) toast('No reward: the ad was closed early.', 2200);
+    updatePurses(); openFish();
+  }));
+  $('fishShop').addEventListener('click', click(() => { closeFish(); openStore(); }));
+  function updatePurses() { $('purseHome').innerHTML = purse(); if (game) refresh(); if (!$('fishSheet').hidden) $('fishBal').textContent = P.fish; }
+
+  // ---------------------------------------------------------------- shop (5.3, mock store on the web)
+  function storeCard(p) {
+    const owned = !MON.canBuy(p.id), g = p.grants || {};
+    const fish = g.fish ? `${g.fish.toLocaleString('en-US')} fish` : '';
+    const icon = p.key === 'removeAds' ? '<span class="store-ico noads" aria-hidden="true">AD</span>' : p.key === 'starter' ? '<img class="store-ico" src="art/logo.svg" alt="">' : `<span class="store-ico fish" aria-hidden="true">${g.fish >= 3000 ? '🐟🐟🐟' : g.fish >= 1000 ? '🐟🐟' : '🐟'}</span>`;
+    return `<button class="store-item ${p.key}${owned ? ' owned' : ''}" data-buy="${p.id}" ${owned ? 'disabled' : ''}>
+      ${p.tag ? `<i class="store-tag">${p.tag}</i>` : ''}${icon}
+      <span class="store-txt"><b>${p.name}</b><small>${p.blurb || fish}</small></span>
+      <span class="store-price">${owned ? 'Owned ✓' : p.price}${owned ? '' : '<small>test</small>'}</span></button>`;
+  }
+  function renderStore() {
+    const ps = MON.products(), by = (k) => ps.filter((p) => p.key === k);
+    const packs = ps.filter((p) => p.type === 'consumable');
+    $('storeList').innerHTML = by('starter').map(storeCard).join('') + by('removeAds').map(storeCard).join('') +
+      `<h4 class="store-h">Fish packs <small>You have 🐟 ${P.fish}</small></h4><div class="store-packs">${packs.map(storeCard).join('')}</div>`;
+  }
+  function openStore() { clockTick(); renderStore(); $('storeScrim').hidden = false; $('storeSheet').hidden = false; clockTick(); }
+  function closeStore() { clockTick(); $('storeScrim').hidden = true; $('storeSheet').hidden = true; clockTick(); }
+  $('storeList').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-buy]'); if (!b || b.disabled) return;
+    sfx('click');
+    const r = await MON.purchase(b.dataset.buy);
+    if (!r.ok) { if (r.cancelled) toast('Purchase cancelled. No charge.', 1800); renderStore(); return; }
+    if (r.fish) P.fish += r.fish;
+    save(); updatePurses(); renderStore();
+    const bits = [r.adFree ? 'Ads between boards removed' : '', r.fish ? `+${r.fish.toLocaleString('en-US')} fish` : '', r.rareCat ? 'a rare cat will appear on an upcoming board' : ''].filter(Boolean);
+    toast(`Thank you! ${bits.join(' · ')} (test purchase)`, 3200); sfx('win');
+  });
+  $('storeRestore').addEventListener('click', click(async () => {
+    const r = await MON.restorePurchases();
+    renderStore(); updatePurses();
+    toast(r.restored.length ? `Restored: ${r.restored.map((id) => (MON.product(id) || {}).name).join(', ')}` : r.owned.length ? 'Your purchases are already active.' : 'No purchases to restore.', 2600);
+  }));
+  $('storeClose').addEventListener('click', click(closeStore));
+  $('storeScrim').addEventListener('click', closeStore);
+  $('btnShop').addEventListener('click', click(openStore));
+  $('optShop').addEventListener('click', click(() => { hideSheets(); openStore(); }));
+
+  // ---------------------------------------------------------------- developer: ad test mode (testMode builds only)
+  const mmss = (ms) => { const t = Math.ceil(ms / 1000); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+  function devStatus() {
+    const m = P.monetize, nextBoard = board && !$('play').hidden ? board : BOARDS.find((b) => !P.cleared[b.boardId]) || BOARDS[BOARDS.length - 1];
+    const highest = Math.max(0, ...Object.keys(P.cleared).map(Number).filter((n) => n > 0 && P.cleared[n]));
+    const sim = Object.assign({}, m, { boardsSinceAd: m.boardsSinceAd + 1 }); // as if the current board just ended
+    const c = MZ.interstitialCheck(sim, MCFG, { boardId: nextBoard.isDaily ? 'daily' : nextBoard.boardId, highestCleared: highest, now: Date.now(), noAds: params.has('noads') });
+    const rw = MZ.rewardedCheck(m, MCFG, 'freeFish', Date.now()), day = m.rewardedDay;
+    const lines = [
+      c.show ? '<b class="ok">Next ad: at the end of this board</b>' : `<b>Next ad: not yet</b> · ${c.reasons.join(' · ')}`,
+      `Play since last ad <b>${mmss(m.playMsSinceAd)}</b> / ${mmss(c.rules.minPlaySecondsSinceAd * 1000)}${c.waitMs ? ` (countdown <b>${mmss(c.waitMs)}</b>)` : ''} · boards since ad ${m.boardsSinceAd} / ${c.rules.minBoardsBetween}`,
+      `Session ${m.sessions} · Remove Ads: ${m.adFree ? 'yes' : 'no'} · ads shown ${m.interstitials} · rewarded today ${day.day === MZ.dayKey(Date.now()) ? day.count : 0} / ${MCFG.rewarded.dailyCap} (free fish ${rw.left} left)`,
+      `Owned: ${Object.keys(m.owned).map((id) => (MON.product(id) || { name: id }).name).join(', ') || 'nothing'}${m.pendingRare ? ` · rare cats pending ${m.pendingRare}` : ''}`,
+    ];
+    $('devStatus').innerHTML = lines.join('<br>');
+    $('optAdFast').checked = !!m.dev.fastRules;
+  }
+  $('devBox').hidden = !MCFG.testMode && !params.has('dev');
+  setInterval(() => { if (!$('setSheet').hidden && !$('devBox').hidden) devStatus(); }, 1000);
+  $('optAdFast').addEventListener('change', () => { P.monetize.dev.fastRules = $('optAdFast').checked; save(); devStatus(); });
+  $('devInter').addEventListener('click', click(async () => { await MON.showInterstitial('dev_force'); devStatus(); }));
+  $('devReward').addEventListener('click', click(async () => { const r = await MON.showRewarded('freeFish', true); toast(r.rewarded ? 'Rewarded test ad completed (no reward granted from the dev button).' : 'Closed early: no reward.', 2600); devStatus(); }));
+  $('devResetBuys').addEventListener('click', click(() => { MON.resetPurchases(); updatePurses(); devStatus(); toast('Test purchases reset (save and mock App Store account).', 2400); }));
   $('fishScrim').addEventListener('click', closeFish);
 
   // test / screenshot hooks (no UI)
@@ -1523,7 +1680,7 @@
     get busy() { return busy || running; }, get vt() { return vt.map((e) => e.tile); },
     get rare() { return rare; }, get hintMarks() { return hintMarks; }, get profile() { return P; },
     get tipOpen() { return tipOpen; }, clockRunning, openHowto,
-    get coach() { return { tile: coachI, under: coachU, stage: coachStage }; }, openFish,
+    get coach() { return { tile: coachI, under: coachU, stage: coachStage }; }, openFish, openStore, MON, MZ, devStatus,
   };
 
   document.addEventListener('touchstart', () => {}, { passive: true }); // lets iOS Safari apply :active (button press-down)
