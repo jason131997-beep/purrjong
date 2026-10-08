@@ -185,7 +185,7 @@
   }
   function hideTip() { clearTimeout(tipTimer); const t = $('tip'); t.classList.remove('show'); t.parentElement.classList.remove('tipping'); }
   function show(name) { for (const s of ['home', 'album', 'play']) $(s).hidden = s !== name; $('fly').hidden = name !== 'play'; }
-  function purse() { return `<span title="Fish">🐟 ${P.fish}</span>`; }
+  function purse() { return `<span>🐟 ${P.fish}</span>`; }
   function markFor(face) {
     const c = CATS[face]; if (!c) return '';
     if (c.bonusSet) return c.bonusSet === 'seasons' ? 'S' : 'L';
@@ -203,6 +203,7 @@
     }
     return `<svg class="shape" viewBox="-0.8 -0.8 ${l.width * sx + 1.6} ${l.height * sy + 1.6}" preserveAspectRatio="xMidYMid meet">${r}</svg>`;
   }
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
   function boardCard(b, next) {
     const l = LAYOUTS[b.layoutId];
     const cleared = P.cleared[b.boardId];
@@ -212,10 +213,12 @@
     const bonusLabel = lucky ? ' + Lucky' : seasons ? ' + Seasons' : '';
     const st = (P.stars && P.stars[b.boardId]) || 0;
     const bt = P.best && P.best[b.boardId];
+    // one status pill, never two: a board in progress says Resume (even a cleared one being replayed), else Next
+    const badge = inProgress ? '<span class="bpill resume">▶ Resume</span>' : !cleared && b.boardId === next ? '<span class="bpill">Next</span>' : '';
     return `<button class="bcard${seasons ? ' seasons' : ''}${lucky ? ' lucky' : ''}${cleared ? ' done' : ''}${!cleared && b.boardId === next ? ' is-next' : ''}" data-board="${b.boardId}">
-        ${cleared ? '<div class="mini-seal">Cleared</div>' : ''}${!cleared && b.boardId === next ? '<div class="new">Next</div>' : ''}${inProgress && !cleared ? '<div class="new">Resume</div>' : ''}
+        ${cleared ? '<div class="mini-seal">Cleared</div>' : ''}
         <div class="num">${b.boardId}</div>${shapeSVG(l)}<div class="nm">${l.name}</div>
-        <div class="meta">${l.tileCount} tiles · ${l.layers} layers${bonusLabel}</div>${cleared || b.hard ? `<div class="bfoot">${cleared ? `<span class="stars" aria-label="${st} of 3 stars">${starStr(st)}</span>` : ''}${b.hard ? '<span class="hard-badge">Hard</span>' : ''}</div>` : ''}${bt ? `<div class="btime" aria-label="Best time ${fmtTime(bt)}">⏱ ${fmtTime(bt)}</div>` : ''}</button>`;
+        <div class="meta">${plural(l.tileCount, 'tile')} · ${plural(l.layers, 'layer')}${bonusLabel}</div>${cleared || b.hard || badge ? `<div class="bfoot">${badge}${cleared ? `<span class="stars" aria-label="${st} of 3 stars">${starStr(st)}</span>` : ''}${b.hard ? '<span class="hard-badge">Hard</span>' : ''}</div>` : ''}${bt ? `<div class="btime" aria-label="Best time ${fmtTime(bt)}">⏱ ${fmtTime(bt)}</div>` : ''}</button>`;
   }
   function albumTotals() {
     const metAll = params.has('albumAll');
@@ -232,7 +235,7 @@
     startAmbience();
     $('purseHome').innerHTML = purse();
     const clearedCount = Object.keys(P.cleared).filter((k) => String(k) !== 'daily' && P.cleared[k]).length;
-    if ($('homeSub')) $('homeSub').textContent = `Chapter ${curCh.n} · ${curCh.name}`;
+    renderHero(next, curCh);
     $('boardGrid').innerHTML = CHAPTERS.map((ch) => {
       const bs = BOARDS.filter((b) => b.boardId >= ch.from && b.boardId <= ch.to);
       const done = bs.filter((b) => P.cleared[b.boardId]).length;
@@ -250,10 +253,8 @@
     }).join('');
     const tot = albumTotals();
     $('albumCount').textContent = `${tot.common}/${tot.commonTotal} · ★${tot.rare}`;
-    // bring the chapter you're playing into view (once per render, instant)
-    const sc = $('homeScroll'), target = next ? document.querySelector(`#boardGrid [data-board="${next}"]`) : null;
-    if (sc && target && curCh.n > 1 && !params.has('top')) requestAnimationFrame(() => { sc.scrollTop = Math.max(0, target.closest('.chapter').offsetTop - 6); });
-    else if (sc) sc.scrollTop = 0;
+    // the hero's Play button continues where you are, so home opens at the top (no pinned chapter label to go stale)
+    const sc = $('homeScroll'); if (sc) sc.scrollTop = 0;
     // Daily stub: unlocks after board 5
     const dailyBtn = $('btnDaily');
     if (dailyBtn) {
@@ -263,11 +264,30 @@
         const key = todayKey();
         const done = !!(P.daily && P.daily[key]);
         dailyBtn.classList.toggle('done', done);
-        $('dailyLabel').textContent = done ? 'Daily cleared' : "Today's puzzle";
-        $('dailyMeta').textContent = done ? key + ' · come back tomorrow' : key + ' · same seed worldwide';
+        const d = new Date();
+        $('dailyMon').textContent = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+        $('dailyDay').textContent = done ? '✓' : String(d.getDate());
+        $('dailyLabel').textContent = done ? 'Daily cleared!' : "Today's puzzle";
+        $('dailyMeta').textContent = done ? 'A new one tomorrow · replay for fun' : `Same board for everyone · +${PAY.daily} bonus fish`;
         dailyBtn.querySelector('.daily-go').textContent = done ? 'Replay' : 'Play';
       }
     }
+  }
+  /** Home hero: the current chapter's scene, and one big button that continues (resume, else the next board). */
+  function homeTarget() {
+    if (P.current && P.current.isDaily) return { daily: true };
+    if (P.current && BOARDS.some((b) => b.boardId === P.current.boardId)) return { id: P.current.boardId, resume: true };
+    const next = (BOARDS.find((b) => !P.cleared[b.boardId]) || {}).boardId;
+    return next ? { id: next } : { id: BOARDS.length, replay: true };
+  }
+  function renderHero(next, curCh) {
+    const t = homeTarget();
+    const b = t.daily ? null : BOARDS.find((x) => x.boardId === t.id), ch = b ? chapterOf(b.boardId) : curCh;
+    $('heroScene').style.setProperty('--hero-scene', `url('${new URL(`art/scenes/${ch.scene}.svg`, location.href).href}')`);
+    $('hero').dataset.scene = ch.scene;
+    $('playLabel').textContent = t.daily ? "Resume today's Daily" : t.resume ? `Resume Board ${t.id}` : t.replay ? `Replay Board ${t.id}` : `Play Board ${t.id}`;
+    $('playMeta').textContent = t.daily ? 'Pick up where you left off' : `${LAYOUTS[b.layoutId].name} · Chapter ${ch.n}: ${ch.name}${b.hard ? ' · Hard' : ''}`;
+    $('btnPlay').classList.toggle('resume', !!(t.resume || t.daily));
   }
   $('boardGrid').addEventListener('click', (e) => {
     const c = e.target.closest('[data-board]'); if (c) startBoard(Number(c.dataset.board));
@@ -355,7 +375,7 @@
   };
   function clockRunning() {
     return !!(game && board && P.current && !$('play').hidden && !document.hidden && $('win').hidden
-      && $('deadSheet').hidden && $('setSheet').hidden && $('howto').hidden && $('tipCard').hidden && !game.isWon() && !game.over && (game.taps > 0 || P.current.ms > 0));
+      && $('deadSheet').hidden && $('setSheet').hidden && $('fishSheet').hidden && $('howto').hidden && $('tipCard').hidden && !game.isWon() && !game.over && (game.taps > 0 || P.current.ms > 0));
   }
   function clockTick() {
     const now = performance.now(), run = clockRunning();
@@ -442,48 +462,69 @@
   // the tile, survive no stale coordinates, and are rebuilt with the board on resize.
   const PAW_SVG = '<svg viewBox="0 0 48 48"><ellipse cx="24" cy="30" rx="10" ry="8.5"/><circle cx="10" cy="18" r="4.5"/><circle cx="18" cy="11" r="4.5"/><circle cx="30" cy="11" r="4.5"/><circle cx="38" cy="18" r="4.5"/></svg>';
   let coachI = -1;
-  function raise(e, on) { if (on) e.style.zIndex = String(60000 + (Number(e.dataset.z0) || 0)); else e.style.zIndex = e.dataset.z0 || ''; }
+  /** Lift a free cat above its neighbours for a highlight. Never lifts a blocked cat: drawn over the cat on top
+   *  of it, a buried cat would look tappable (the 5.1 "tap a covered tile" bug). */
+  function raise(e, on) {
+    if (on) { const i = els.indexOf(e); if (i < 0 || !game || !game.isFree(i)) { e.style.zIndex = e.dataset.z0 || ''; return; } e.style.zIndex = String(60000 + (Number(e.dataset.z0) || 0)); }
+    else e.style.zIndex = e.dataset.z0 || '';
+  }
+  let coachU = -1; // the stuck cat a board 2-3 coach step explains (ringed, never lifted, never pawed)
   function hideCoach() {
     const e = coachI >= 0 && els[coachI];
     if (e) { e.classList.remove('coach-target'); const p = e.querySelector('.coach-paw'); if (p) p.remove(); if (!e.classList.contains('hint')) raise(e, false); }
-    coachI = -1;
+    const u = coachU >= 0 && els[coachU];
+    if (u) u.classList.remove('coach-under');
+    coachI = -1; coachU = -1;
+  }
+  /**
+   * Boards 1-3 teach with a paw. Every paw target comes from the live core state (game.coachTarget) and is a
+   * free cat whose twin is free too when there is one: board 1 a plain free pair, board 2 a free cat beside a
+   * boxed-in one, board 3 a free cat sitting on a covered one. The stuck cat only gets a dashed ring.
+   */
+  const COACH_TEXT = {
+    1: 'Tap this free cat: it goes to the shelf. Two matching cats pop!',
+    2: 'The dimmed cat is boxed in on both sides. Tap this free cat beside it to open it up.',
+    3: 'Cats can stack. Tap this free cat on top to uncover the one under it.',
+  };
+  function coachPlan() {
+    if (!game || !board) return null;
+    const id = board.boardId;
+    let t = id === 2 ? game.coachTarget('sides') : id === 3 ? game.coachTarget('covered') : null;
+    let msg = COACH_TEXT[id];
+    if (!t) { t = game.coachTarget('pair'); msg = COACH_TEXT[1]; }
+    return t ? { ...t, msg } : null;
   }
   function maybeCoach() {
-    if (!board || board.isDaily) return;
+    if (!board || board.isDaily || board.boardId > 3) return;
     if (P.coachDone && P.coachDone[board.boardId]) return;
-    if (board.boardId === 1 && game.taps === 0) {
-      // a free cat whose twin is free too, so the first two taps break a pair
-      const free = game.freeTiles();
-      for (const a of free) for (const b of free) if (a !== b && C.facesMatch(game.faces[a], game.faces[b])) { coachStage = 1; showCoach(a, 'Tap this free cat: it goes to the shelf. Two matching cats pop!'); return; }
-    } else if (board.boardId === 2 && game.taps === 0) {
-      const blocked = [];
-      for (let i = 0; i < game.tileCount; i++) if (game.present[i] && !game.isFree(i)) blocked.push(i);
-      if (blocked.length) showCoach(blocked[0], 'Dimmed cats are blocked. Tap the free cats around it first.');
-    } else if (board.boardId === 3 && game.taps === 0) {
-      const covered = [];
-      for (let i = 0; i < game.tileCount; i++) if (game.present[i] && game.blockReason(i) === 'covered') covered.push(i);
-      if (covered.length) showCoach(covered[0], 'This cat is covered. Tap the cat on top to reach it.');
-    }
+    if (game.taps !== 0 || !$('tipCard').hidden) return;
+    const t = coachPlan(); if (!t) return;
+    coachStage = 1;
+    showCoach(t.tile, t.msg, t.blocked);
   }
-  function showCoach(i, msg) {
+  function showCoach(i, msg, under) {
     hideCoach();
+    if (!game || !game.present[i] || !game.isFree(i)) return; // the paw only ever sits on a cat you can tap right now
     if (msg) tip(msg, 6000);
     const e = els[i]; if (!e) return;
     coachI = i; e.classList.add('coach-target'); raise(e, true);
     const p = document.createElement('div'); p.className = 'coach-paw'; p.innerHTML = PAW_SVG; e.appendChild(p);
+    if (under >= 0 && els[under] && game.present[under] && !game.isFree(under)) { coachU = under; els[under].classList.add('coach-under'); }
   }
   function markCoachDone() {
     if (!board || board.isDaily) return;
     if (board.boardId <= 3) { P.coachDone = P.coachDone || {}; P.coachDone[board.boardId] = true; save(); }
+    coachStage = 3;
     hideCoach();
   }
-  /** Board 1, after the first cat lands on the shelf: point at its free twin. */
+  /** After the first coached cat lands on the shelf: point at a free twin, looked up in the live state. */
   function coachTwin(tile) {
-    if (!board || board.boardId !== 1 || coachStage !== 1) return;
+    if (!board || board.boardId > 3 || coachStage !== 1) return;
     coachStage = 2;
-    const twin = game.freeTiles().find((j) => C.facesMatch(game.faces[j], game.faces[tile]));
+    const k = game.tray.includes(tile) ? tile : -1;
+    const twin = k < 0 ? null : game.legalTaps().find((j) => C.facesMatch(game.faces[j], game.faces[k]));
     if (twin != null) showCoach(twin, 'Now tap its twin: the pair pops!');
-    else hideCoach();
+    else markCoachDone();
   }
 
   // ---------------------------------------------------------------- board view
@@ -508,7 +549,7 @@
   let pressI = -1;
   function buildBoard() {
     const b = $('board');
-    const ci = coachI; coachI = -1;
+    const ci = coachI, cu = coachU; coachI = -1; coachU = -1;
     b.innerHTML = '';
     b.style.setProperty('--layers', String(layout.layers));
     M = computeMetrics();
@@ -541,7 +582,7 @@
       return e;
     });
     els.forEach((_, i) => place(i));
-    if (ci >= 0) showCoach(ci);
+    if (ci >= 0 && game.isFree(ci)) showCoach(ci, null, cu); // re-checked live: never re-paw a cat that got covered
   }
   function refresh() {
     for (let i = 0; i < els.length; i++) {
@@ -573,6 +614,7 @@
     $('shuffleBadge').textContent = P.shuffles > 0 ? P.shuffles : HELP_COST;
     $('shuffleBadge').classList.toggle('fish', P.shuffles <= 0);
     const uf = P.current ? P.current.undoFree : 0;
+    $('fishPlay').textContent = P.fish;
     $('undoBadge').textContent = uf > 0 ? uf : UNDO_COST;
     $('undoBadge').classList.toggle('fish', uf <= 0);
     $('btnUndo').disabled = !game.canUndo;
@@ -850,7 +892,8 @@
     if (game.over) { showDead(); return; } // round is over: board input is locked until Revive / Retry
     if (!game.canTap(i)) return;
     clearHint();
-    if (!(board.boardId === 1 && coachStage === 1)) markCoachDone();
+    if (coachStage === 1) hideCoach(); // the paw leaves with the tap; coachTwin then finds a free twin live
+    else markCoachDone();
     const r = game.tap(i);
     sfx('tap'); buzz('tap');
     lifted.add(i);
@@ -868,7 +911,7 @@
         job.rare = rare;
         if (first) { job.newRare = true; P.current.newRares = (P.current.newRares || []).concat(rare.id); }
       } else for (const f of [game.faces[i], game.faces[r.partner]]) P.album[f] = (P.album[f] || 0) + (CATS[f] && CATS[f].bonusSet ? 1 : 0.5);
-      if (coachStage === 2) { markCoachDone(); coachStage = 3; }
+      if (coachStage === 2 || coachStage === 1) markCoachDone();
     } else {
       if (coachStage === 1) job.coachTwin = true;
       if (game.tray.length === game.slots - 1 && warnedAt !== game.taps) { warnedAt = game.taps; job.warn = true; }
@@ -1007,7 +1050,8 @@
     // settle the board first: finish the entry animation so the highlight sits on tiles at rest
     els.forEach((e) => { if (e.getAnimations) e.getAnimations().forEach((a) => { try { a.finish(); } catch (err) { /* infinite */ } }); });
     hideCoach(); hideTip();
-    let withT = (h.with || []).slice();
+    // only cats you can tap right now glow on the board (shelf twins are always fine)
+    let withT = (h.with || []).filter((t) => !game.present[t] || game.isFree(t));
     if (!withT.length && h.safe && !h.onTray) {
       // show the pair: a free twin that still keeps a win open after both taps (checked, then undone)
       for (let u = 0; u < game.tileCount && !withT.length; u++) {
@@ -1022,6 +1066,7 @@
     }
     hintMarks = { tiles: [], shelf: [], tap: h.tile };
     for (const t of [h.tile].concat(withT)) (game.present[t] ? hintMarks.tiles : hintMarks.shelf).push(t);
+    if (!game.isFree(h.tile)) { hintMarks = null; return; } // never: core hints come from legal taps
     applyHint();
     tip(hintMarks.shelf.length ? 'Tap the cat with the paw: it matches the glowing cat on your shelf.' : withT.length ? 'Tap the cat with the paw, then its glowing twin.' : 'Tap the cat with the paw.', 4200);
     if (h.safe === null) toast('This cat is a fine move, but I could not check it all the way to a win.', 3200);
@@ -1037,6 +1082,7 @@
     await flush();
     if (!spend('shuffles')) return;
     clearHint();
+    hideCoach(); if (coachStage === 1 || coachStage === 2) markCoachDone();
     if (!game.shuffle()) { refund('shuffles'); toast('No shuffle can fix this layout. Try Undo.'); refresh(); return; }
     P.current.usedHelp = true; persist();
     hideSheets();
@@ -1134,6 +1180,10 @@
     $('winTitle').textContent = board.isDaily ? (`Daily · ` + todayKey()) : (`Board ${board.boardId} · ${layout.name}`);
     const extra = first && board.boardId === 3 ? ' · Album unlocked' : (first && board.boardId === 5 ? ' · Daily unlocked' : (board.isDaily ? ' · Daily stamp!' : ''));
     $('winText').textContent = `${moves} pairs · +${awarded} fish${bonus ? ' (no-help bonus!)' : ''}${chains ? ` · ${chains} purr chain${chains > 1 ? 's' : ''}` : ''}${extra}`;
+    // first fish ever earned: a one-time callout on the win card, with a link to the fish sheet
+    const firstFish = !noTips && !(P.tipsSeen = P.tipsSeen || {}).fishEarned;
+    $('winFish').hidden = !firstFish;
+    if (firstFish) { P.tipsSeen.fishEarned = true; save(); }
     $('winStars').innerHTML = '<b>' + '<i>★</i>'.repeat(stars) + '</b>' + '<i>☆</i>'.repeat(3 - stars);
     $('winStars').setAttribute('aria-label', `${stars} of 3 stars`);
     const wt = $('winTime');
@@ -1227,6 +1277,10 @@
     if (board.boardId < BOARDS.length) startBoard(board.boardId + 1);
     else { renderHome(); show('home'); }
   }));
+  $('btnPlay').addEventListener('click', click(() => {
+    const t = homeTarget();
+    if (t.daily) startBoard('daily', { daily: true }); else startBoard(t.id);
+  }));
   if ($('btnDaily')) $('btnDaily').addEventListener('click', click(() => startBoard('daily', { daily: true, restart: true })));
   $('btnWinHome').addEventListener('click', click(() => { $('win').hidden = true; renderHome(); show('home'); }));
   $('btnAlbum').addEventListener('click', click(() => { renderAlbum(); show('album'); }));
@@ -1292,7 +1346,7 @@
         stage: `<div class="mseals"><div><span class="seal mseal">${SVG_ICON('btnUndo')}<span>Undo</span></span><small>Take back the last cat</small></div>
           <div><span class="seal mseal mhint">${SVG_ICON('btnHint')}<span>Hint</span></span><small>Shows a safe cat to tap</small></div>
           <div><span class="seal mseal">${SVG_ICON('btnShuffle')}<span>Shuffle</span></span><small>Mixes the cats left</small></div></div>
-          <ul class="mlist"><li><i>🐟</i><span>Free helpers run out. <b>Fish</b> buy more, and you earn fish by clearing boards.</span></li>
+          <ul class="mlist"><li><i>🐟</i><span><b>Fish</b> are earned by clearing boards. When free helpers run out they buy more: hint or shuffle ${HELP_COST}, undo ${UNDO_COST}, revive ${REVIVE_COST}. Tap 🐟 anytime to see yours.</span></li>
           <li><i class="mstar">★</i><span>Get <b>3 stars</b> by winning without help, and beat your <b>best time</b>.</span></li>
           <li><img src="${art('cosmos')}" alt=""><span><b>Rare cats</b> sometimes hide on a board. Match them to collect them in the Album.</span></li></ul>` },
     ];
@@ -1332,11 +1386,17 @@
 
   // ---- one-time tip cards
   const TIP_TITLE = { hints: 'Out of free hints', shuffles: 'Out of free shuffles' };
+  /** The cats in the way of stuck cat i: what sits on it, or its two side neighbours (live state). */
+  function blockersOf(i) {
+    if (!game || !game.present[i]) return [];
+    const g = game.geom, on = g.above[i].filter((j) => game.present[j]);
+    return on.length ? on : g.left[i].concat(g.right[i]).filter((j) => game.present[j]);
+  }
   function tipDef(key, ctx) {
     ctx = ctx || {};
     const present = (f) => { const r = []; for (let i = 0; i < game.tileCount; i++) if (game.present[i] && f(game.faces[i])) r.push(i); return r; };
     switch (key) {
-      case 'blocked': return { title: 'That cat is stuck', text: ctx.why === 'covered' ? "Something's on top of it. Tap the cat on top first." : "Both of its sides are blocked. Clear a cat next to it first.", sub: 'Free cats have nothing on top and an open left or right side.', tiles: [ctx.tile] };
+      case 'blocked': return { title: 'That cat is stuck', text: ctx.why === 'covered' ? "Something's on top of it. Tap the cat on top first." : "Both of its sides are blocked. Clear a cat next to it first.", sub: 'Free cats have nothing on top and an open left or right side.', tiles: [ctx.tile].concat(blockersOf(ctx.tile)) };
       case 'shelf3': return { title: 'Careful: 3 on the shelf', text: 'One more cat without a match fills the shelf and ends the round.', sub: 'Next, tap a cat that matches one on the shelf.', shelf: true };
       case 'revive': return { title: 'Shelf full: round over', text: '<b>Revive</b> sends the shelf cats back to their spots so you can keep going. Free once per board, then it costs fish.', sub: 'Or Retry to start the board fresh.', shelf: true, sheet: true };
       case 'seasons': return { title: 'Season cats', text: 'Any two Season cats match each other: spring with autumn works!', art: C.BONUS_SETS.seasons, tiles: present((f) => C.BONUS_SETS.seasons.includes(f)) };
@@ -1409,6 +1469,7 @@
     $('shelf').classList.remove('tip-focus');
     clockTick();
     if (tipQueue.length) setTimeout(nextTip, 180);
+    else if (game && game.taps === 0 && coachI < 0) setTimeout(maybeCoach, 120); // a start card held the coach back
   }
   function resetTips() { tipQueue = []; if (tipOpen) closeTip(); }
   $('tipCardOk').addEventListener('click', click(closeTip));
@@ -1425,12 +1486,44 @@
     return out;
   }
 
+  // ---------------------------------------------------------------- fish sheet (5.2)
+  /** What fish are, how you earn them and what they buy: every number comes from the live economy constants. */
+  function openFish() {
+    clockTick();
+    const chip = (v) => `<span class="fish-amt">${v}</span>`;
+    const free = (n, what) => n > 0 ? `<small>${n} free ${what} left, then</small>` : '';
+    $('fishBal').textContent = P.fish;
+    $('fishEarn').innerHTML = [
+      ['Clear a board', `+${PAY.clear}`],
+      ['Clear it without hints or shuffles', `+${PAY.noHelp}`],
+      ['Purr chains: quick matches in a row', `+1 each, up to +${PAY.chainMax}`],
+      ["Clear today's Daily puzzle", `+${PAY.daily} bonus`],
+    ].map(([a, v]) => `<li><span>${a}</span>${chip('🐟 ' + v)}</li>`).join('');
+    const uf = P.current && game && !$('play').hidden ? P.current.undoFree : UNDO_FREE;
+    $('fishSpend').innerHTML = [
+      ['Extra hint', free(P.hints, P.hints === 1 ? 'hint' : 'hints'), HELP_COST],
+      ['Extra shuffle', free(P.shuffles, P.shuffles === 1 ? 'shuffle' : 'shuffles'), HELP_COST],
+      ['Undo', `<small>${UNDO_FREE} free per board${P.current && !$('play').hidden ? ` (${uf} left here)` : ''}, then</small>`, UNDO_COST],
+      ['Revive', '<small>first one free on each board, then</small>', REVIVE_COST],
+    ].map(([a, note, c]) => `<li><span>${a}${note}</span>${chip('🐟 ' + c)}</li>`).join('');
+    $('fishScrim').hidden = false; $('fishSheet').hidden = false;
+    clockTick();
+    sfx('tap');
+  }
+  function closeFish() { clockTick(); $('fishScrim').hidden = true; $('fishSheet').hidden = true; clockTick(); }
+  $('purseHome').addEventListener('click', click(openFish));
+  $('pursePlay').addEventListener('click', click(() => { if (!$('tipCard').hidden) return; openFish(); }));
+  $('winFishMore').addEventListener('click', click(openFish));
+  $('fishClose').addEventListener('click', click(closeFish));
+  $('fishScrim').addEventListener('click', closeFish);
+
   // test / screenshot hooks (no UI)
   window.__purr = {
     get game() { return game; }, tap: onTap, undo, hint, shuffle, idle, flush,
     get busy() { return busy || running; }, get vt() { return vt.map((e) => e.tile); },
     get rare() { return rare; }, get hintMarks() { return hintMarks; }, get profile() { return P; },
     get tipOpen() { return tipOpen; }, clockRunning, openHowto,
+    get coach() { return { tile: coachI, under: coachU, stage: coachStage }; }, openFish,
   };
 
   document.addEventListener('touchstart', () => {}, { passive: true }); // lets iOS Safari apply :active (button press-down)

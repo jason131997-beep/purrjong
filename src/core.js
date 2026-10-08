@@ -754,7 +754,9 @@
       const pack = (moves, safe) => {
         const t = moves[0];
         const j = this.trayMatch(t);
-        const withT = j >= 0 ? [this.tray[j]] : (moves.length > 1 && facesMatch(this.faces[moves[1]], this.faces[t]) ? [moves[1]] : []);
+        // the twin to glow is only named when it is free right now (a twin that the paw cat sits on would
+        // read as "tap this" while it is still buried; the app then looks for another free twin)
+        const withT = j >= 0 ? [this.tray[j]] : (moves.length > 1 && facesMatch(this.faces[moves[1]], this.faces[t]) && this.isFree(moves[1]) ? [moves[1]] : []);
         return { tile: t, with: withT, onTray: j >= 0, safe, boardSolvable: safe };
       };
       const r = solveTray(this.geom, this.faces, this.present, { slots: this.hold, maxNodes: budget, rank: this.solutionRank() });
@@ -785,6 +787,46 @@
         if (res && q.solved === true) return pack([t].concat(q.moves), true);
       }
       return { tile: order[0], with: [], onTray: this.trayMatch(order[0]) >= 0, safe: null, boardSolvable: null };
+    }
+    /**
+     * Beginner coach target, always from the live state. Returns { tile, twin, blocked } or null:
+     * tile is a free cat to tap (the paw), twin a free cat it pairs with (or -1), blocked the stuck cat it
+     * opens up (or -1). kind 'pair': any free cat; 'sides': a free cat beside a boxed-in one; 'covered': a
+     * free cat sitting on a covered one. Prefers a fully free pair whose two taps still leave a win.
+     */
+    coachTarget(kind, opts) {
+      opts = opts || {};
+      if (this.over) return null;
+      const free = this.legalTaps();
+      const freeSet = new Set(free);
+      const cands = [];
+      for (const t of free) {
+        let blocked = -1;
+        if (kind === 'sides') {
+          for (const c of this.geom.left[t].concat(this.geom.right[t])) if (this.present[c] && this.blockReason(c) === 'sides') { blocked = c; break; }
+          if (blocked < 0) continue;
+        } else if (kind === 'covered') {
+          for (const c of this.geom.below[t]) if (this.present[c] && this.blockReason(c) === 'covered') { blocked = c; break; }
+          if (blocked < 0) continue;
+        }
+        const twins = free.filter((u) => u !== t && freeSet.has(u) && facesMatch(this.faces[u], this.faces[t]));
+        cands.push({ tile: t, twins, blocked });
+      }
+      if (!cands.length) return null;
+      const budget = opts.maxNodes || 20000;
+      const winsAfter = (t, u) => {
+        const r1 = this.tap(t); if (!r1) return false;
+        let ok = false;
+        if (u >= 0) { const r2 = this.over ? null : this.tap(u); ok = !!r2 && !this.over && (this.remaining === 0 || this.isSolvable(budget) === true); if (r2) this.undo(); }
+        else ok = !this.over && (this.remaining === 0 || this.isSolvable(budget) === true);
+        this.undo();
+        return ok;
+      };
+      // 1) both cats free and the pair keeps a win open, 2) both free, 3) a lone free cat that keeps a win open
+      for (const c of cands) for (const u of c.twins) if (winsAfter(c.tile, u)) return { tile: c.tile, twin: u, blocked: c.blocked };
+      for (const c of cands) if (c.twins.length) return { tile: c.tile, twin: c.twins[0], blocked: c.blocked };
+      for (const c of cands) if (winsAfter(c.tile, -1)) return { tile: c.tile, twin: -1, blocked: c.blocked };
+      return { tile: cands[0].tile, twin: -1, blocked: cands[0].blocked };
     }
     /**
      * Shuffle: re-deal the faces still on the board (shelf tiles keep theirs) so the board can be cleared

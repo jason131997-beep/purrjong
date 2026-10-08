@@ -7,14 +7,17 @@
 <meta name="description" content="Purrjong — cozy cat mahjong solitaire. Send kitties to the shelf and match pairs across 80 boards in 8 chapters, and hunt for rare cats.">
 <title>Purrjong: Cat Mahjong Puzzle</title>
 <link rel="icon" href="art/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="art/favicon-32.png" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" sizes="180x180" href="art/apple-touch-icon.png">
+<link rel="manifest" href="art/manifest.webmanifest">
+<meta name="application-name" content="Purrjong">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Purrjong">
-<meta name="purrjong-version" content="5.1.0-202610072053">
-<link rel="stylesheet" href="src/tile.css?v=5.1.0-202610072053">
-<link rel="stylesheet" href="src/app.css?v=5.1.0-202610072053">
+<meta name="purrjong-version" content="5.2.0-202610072205">
+<link rel="stylesheet" href="src/tile.css?v=5.2.0-202610072205">
+<link rel="stylesheet" href="src/app.css?v=5.2.0-202610072205">
 </head>
 <body>
 <div class="scene" id="scene" aria-hidden="true"></div>
@@ -24,22 +27,28 @@
   <!-- HOME / BOARD SELECT -->
   <section class="screen" id="home" hidden>
     <header class="home-head">
-      <div class="logo" aria-label="Purrjong">
-        <img class="logo-mark" src="art/favicon.svg" alt="">
-        <div class="logo-text"><span>Purr</span><b>jong</b></div>
-      </div>
-      <div class="home-tools"><div class="purse" id="purseHome"></div><button class="icon-btn help-btn" id="btnHelp" aria-label="How to play">?</button></div>
+      <div class="home-tools"><button class="purse" id="purseHome" aria-label="Your fish: what they are for"></button><button class="icon-btn help-btn" id="btnHelp" aria-label="How to play">?</button></div>
     </header>
-    <p class="home-sub" id="homeSub">Chapter 1 · Tea Garden</p>
     <div class="home-scroll" id="homeScroll">
+    <section class="hero" id="hero">
+      <div class="hero-scene" id="heroScene" aria-hidden="true"></div>
+      <div class="hero-cats" aria-hidden="true"><img class="hero-cat c1" src="art/cats/sleepy.svg" alt=""><img class="hero-cat c2" src="art/cats/tabby.svg" alt=""><img class="hero-cat c3" src="art/cats/calico.svg" alt=""></div>
+      <div class="logo hero-logo" aria-label="Purrjong">
+        <img class="logo-mark" src="art/logo.svg" alt="" width="76" height="76">
+        <div class="hero-words"><div class="logo-text"><span>Purr</span><b>jong</b></div><small class="hero-tag">Cozy cat mahjong</small></div>
+      </div>
+      <button class="play-cta" id="btnPlay"><span class="play-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg></span><span class="play-txt"><b id="playLabel">Play Board 1</b><small id="playMeta">Paw Print · Tea Garden</small></span></button>
+    </section>
     <button class="daily-card" id="btnDaily" hidden>
-      <div class="daily-seal">Daily</div>
+      <div class="daily-cal" aria-hidden="true"><small id="dailyMon">OCT</small><b id="dailyDay">7</b></div>
       <div class="daily-body">
         <strong id="dailyLabel">Today's puzzle</strong>
         <span id="dailyMeta">Unlocks after board 5</span>
       </div>
       <span class="daily-go">Play</span>
+      <img class="daily-peek" src="art/cats/lucky-gold.svg" alt="" aria-hidden="true">
     </button>
+    <h2 class="home-h"><span>Chapters</span></h2>
     <div class="board-grid" id="boardGrid"></div>
     </div>
     <div class="home-actions">
@@ -70,6 +79,7 @@
       <span class="timer" id="timer" role="timer" aria-label="Board time">0:00</span>
       <svg viewBox="0 0 300 12" preserveAspectRatio="none" aria-hidden="true"><path class="track" d="M4,7 C60,4 120,8 180,6 S260,5 296,6"/><path class="ink" id="progressInk" d="M4,7 C60,4 120,8 180,6 S260,5 296,6" pathLength="100"/></svg>
       <span id="tilesLeft">0 left</span>
+      <button class="fish-chip" id="pursePlay" aria-label="Your fish: what they are for">🐟 <b id="fishPlay">0</b></button>
     </div>
     <div class="shelf-wrap" id="shelfWrap">
       <div class="shelf" id="shelf" aria-label="Shelf">
@@ -132,6 +142,19 @@
     </div>
   </div>
 
+  <!-- fish sheet: what fish are, how you earn them, what they buy (prices from the real economy, filled by app.js) -->
+  <div class="scrim fish-scrim" id="fishScrim" hidden></div>
+  <div class="sheet fish-sheet" id="fishSheet" hidden role="dialog" aria-modal="true" aria-labelledby="fishTitle">
+    <div class="grab"></div>
+    <div class="fish-head"><span class="fish-coin" aria-hidden="true">🐟</span><div><h3 id="fishTitle">Fish</h3><p class="fish-bal">You have <b id="fishBal">0</b> fish</p></div></div>
+    <p class="fish-what">Fish are your treats. Earn them by clearing boards, then spend them on extra help when the free helpers run out.</p>
+    <h4 class="fish-h">Earn</h4>
+    <ul class="fish-list" id="fishEarn"></ul>
+    <h4 class="fish-h">Spend</h4>
+    <ul class="fish-list" id="fishSpend"></ul>
+    <div class="sheet-actions"><button class="pill" id="fishClose">Got it</button></div>
+  </div>
+
   <!-- win -->
   <div class="win" id="win" hidden>
     <div class="petals" id="petals"></div>
@@ -145,6 +168,7 @@
       <div class="win-new" id="winNew" hidden></div>
       <small class="win-stars-note" id="winStarsNote"></small>
       <p id="winText"></p>
+      <div class="win-fish" id="winFish" hidden><span class="win-fish-ico" aria-hidden="true">🐟</span><span><b>Your first fish!</b> Fish buy extra hints, shuffles, undos and revives.</span><button class="win-fish-more" id="winFishMore">What are fish?</button></div>
       <button class="pill big" id="btnNext">Next</button>
       <button class="link" id="btnWinHome">Boards</button>
     </div>
@@ -153,7 +177,7 @@
   <!-- one-time contextual tip card (input blocked behind it, timer paused; placed away from the tiles it is about) -->
   <div class="tip-block" id="tipBlock" hidden></div>
   <div class="tipcard" id="tipCard" hidden role="dialog" aria-labelledby="tipCardTitle" aria-describedby="tipCardText">
-    <img class="tipcard-cat" src="art/favicon.svg" alt="">
+    <img class="tipcard-cat" src="art/cats/marmalade.svg" alt="">
     <div class="tipcard-body"><b id="tipCardTitle"></b><p id="tipCardText"></p><div class="tipcard-art" id="tipCardArt"></div></div>
     <button class="pill tipcard-ok" id="tipCardOk">Got it</button>
   </div>
@@ -170,11 +194,11 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<script src="data/data.js?v=5.1.0-202610072053"></script>
-<script src="src/core.js?v=5.1.0-202610072053"></script>
-<script src="src/rares.js?v=5.1.0-202610072053"></script>
-<script src="src/audio.js?v=5.1.0-202610072053"></script>
-<script src="src/haptics.js?v=5.1.0-202610072053"></script>
-<script src="src/app.js?v=5.1.0-202610072053"></script>
+<script src="data/data.js?v=5.2.0-202610072205"></script>
+<script src="src/core.js?v=5.2.0-202610072205"></script>
+<script src="src/rares.js?v=5.2.0-202610072205"></script>
+<script src="src/audio.js?v=5.2.0-202610072205"></script>
+<script src="src/haptics.js?v=5.2.0-202610072205"></script>
+<script src="src/app.js?v=5.2.0-202610072205"></script>
 </body>
 </html>

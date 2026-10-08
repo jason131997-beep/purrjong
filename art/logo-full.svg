@@ -5,13 +5,13 @@
 <linearGradient id="face" x1="0" y1="0" x2=".55" y2="1"><stop offset="0" stop-color="#FFFFFA"/><stop offset=".42" stop-color="#FFFBF2"/><stop offset="1" stop-color="#F7EEDA"/></linearGradient>
 <filter id="drop" x="-20%" y="-20%" width="150%" height="150%"><feGaussianBlur stdDeviation="20.48"/></filter>
 </defs>
-<rect width="1024" height="1024" rx="225.28" fill="url(#bg)"/>
-<rect x="252.098" y="163.03" width="645" height="860" rx="77.39999999999999" fill="#1E2822" opacity=".28" filter="url(#drop)"/>
-<rect x="239.81" y="132.31" width="645" height="860" rx="77.39999999999999" fill="#386A58"/><rect x="223.04" y="115.53999999999999" width="645" height="860" rx="77.39999999999999" fill="#4A8470"/><rect x="206.26999999999998" y="98.77" width="645" height="860" rx="77.39999999999999" fill="#5B9880"/><rect x="189.5" y="82" width="645" height="860" rx="77.39999999999999" fill="#D8C59E"/><rect x="172.73" y="65.22999999999999" width="645" height="860" rx="77.39999999999999" fill="#E6D7B6"/><rect x="155.96" y="48.459999999999994" width="645" height="860" rx="77.39999999999999" fill="#F0E4C9"/>
-<rect x="139.19" y="31.689999999999998" width="645" height="860" rx="77.39999999999999" fill="url(#face)"/>
-<rect x="142.19" y="34.69" width="639" height="854" rx="74.39999999999999" fill="none" stroke="#2B2A28" stroke-opacity=".28" stroke-width="6"/>
-<path d="M193.37,45.69 H706.7900000000001" stroke="#fff" stroke-opacity=".9" stroke-width="12" stroke-linecap="round"/>
-<svg x="158.54000000000002" y="158.54000000000002" width="606.3" height="606.3" viewBox="0 0 100 100">
+<rect width="1024" height="1024" fill="url(#bg)"/>
+<rect x="283.74800000000005" y="207.17999999999998" width="570" height="760" rx="68.39999999999999" fill="#1E2822" opacity=".28" filter="url(#drop)"/>
+<rect x="271.46000000000004" y="176.45999999999998" width="570" height="760" rx="68.39999999999999" fill="#386A58"/><rect x="256.64" y="161.64" width="570" height="760" rx="68.39999999999999" fill="#4A8470"/><rect x="241.82000000000002" y="146.82" width="570" height="760" rx="68.39999999999999" fill="#5B9880"/><rect x="227" y="132" width="570" height="760" rx="68.39999999999999" fill="#D8C59E"/><rect x="212.18" y="117.18" width="570" height="760" rx="68.39999999999999" fill="#E6D7B6"/><rect x="197.36" y="102.36" width="570" height="760" rx="68.39999999999999" fill="#F0E4C9"/>
+<rect x="182.54000000000002" y="87.54" width="570" height="760" rx="68.39999999999999" fill="url(#face)"/>
+<rect x="185.54000000000002" y="90.54" width="564" height="754" rx="65.39999999999999" fill="none" stroke="#2B2A28" stroke-opacity=".28" stroke-width="6"/>
+<path d="M230.42000000000002,101.54 H684.14" stroke="#fff" stroke-opacity=".9" stroke-width="12" stroke-linecap="round"/>
+<svg x="199.64000000000004" y="199.64000000000004" width="535.8" height="535.8" viewBox="0 0 100 100">
 
 <defs><clipPath id="marmalade-frame"><circle cx="50" cy="52" r="45"/><rect x="0" y="0" width="100" height="52"/></clipPath><clipPath id="marmalade-head"><path d="M50,27 C71.7,27 85,40 85,56 C85,74 69.25,77 50,77 C30.75,77 15,74 15,56 C15,40 28.3,27 50,27 Z"/></clipPath><clipPath id="marmalade-body"><path d="M27,70 C15,76 9,88 8,104 L92,104 C91,88 85,76 73,70 Z"/></clipPath></defs>
 <g id="backdrop"><circle cx="50" cy="52" r="45" fill="#CFE3D6"/></g>
