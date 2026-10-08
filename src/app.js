@@ -9,6 +9,7 @@
   const CATS = Object.fromEntries(D.cats.cats.map((c) => [c.id, c]));
   const SUIT_LETTER = { garden: 'G', teahouse: 'T', nightmarket: 'N', festival: 'F', grove: 'B', pond: 'K', blossom: 'H', snowy: 'Y', moonlit: 'M' };
   const RS = window.PurrRares;
+  const PG = window.PurrProgress; // v5.4 level locks (src/progress.js)
   const MZ = window.PurrMonetize, MCFG = D.monetize || { interstitial: { enabled: false }, rewarded: { placements: {} }, products: [] };
   // v5 chapters: boards 1-30 become chapters 1-3 (their old scenes); chapters 4-8 are boards 31-80.
   const CHAPTERS = D.boards.chapters || [{ n: 1, id: 'garden', name: 'Tea Garden', scene: 'garden', from: 1, to: BOARDS.length, newCats: [] }];
@@ -34,7 +35,7 @@
   const H = window.PurrHaptics || { fire() {}, set() {} };
 
   // ---------------------------------------------------------------- profile + save
-  const defaults = () => ({ v: PROFILE_VERSION, fish: 20, hints: 1, shuffles: 1, cleared: {}, stars: {}, best: {}, album: {}, daily: {}, rares: {}, rareState: { pity: 0, last: null }, tipsSeen: {}, howtoSeen: false, monetize: MZ.freshState(), settings: { showBlocked: false, marks: false, motion: false, sound: true, music: true, sfxVol: 0.7, musicVol: 0.3, haptics: true, track: 'rotate', trackIdx: 0 }, current: null, coachDone: {} });
+  const defaults = () => ({ v: PROFILE_VERSION, fish: 20, hints: 1, shuffles: 1, cleared: {}, stars: {}, best: {}, album: {}, daily: {}, rares: {}, rareState: { pity: 0, last: null }, tipsSeen: {}, howtoSeen: false, monetize: MZ.freshState(), settings: { showBlocked: false, marks: false, motion: false, sound: true, music: true, sfxVol: 0.7, musicVol: 0.3, haptics: true, track: 'rotate', trackIdx: 0, unlockAll: false }, current: null, coachDone: {} });
   let migratedNote = '';
   let P = (function load() {
     if (noSave) return defaults();
@@ -76,6 +77,19 @@
     onAdStart: () => { clockTick(); try { A.stopMusic(true); } catch (e) { /* */ } },
     onAdEnd: () => { clockTick(); try { if (P.settings.music) A.startMusic(); } catch (e) { /* */ } },
   });
+  // ---- v5.4 level locks: board N+1 opens when board N is cleared (derived from P.cleared, see src/progress.js)
+  const DEV_OK = !!MCFG.testMode || params.has('dev');
+  const unlockAll = () => params.has('unlockall') || (DEV_OK && !!P.settings.unlockAll);
+  const lockOpts = () => ({ unlockAll: unlockAll(), total: BOARDS.length });
+  const boardOpen = (id) => PG.isUnlocked(P.cleared, id, lockOpts());
+  const dailyOpen = () => PG.dailyUnlocked(P.cleared, P.daily, lockOpts());
+  let justUnlocked = null; // board opened by the last win: animated on the win card, then once on the board list
+  const LOCK_SVG = '<svg class="padlock" viewBox="0 0 24 24" aria-hidden="true"><path class="shackle" d="M7.6 11.2V8.3a4.4 4.4 0 0 1 8.8 0v2.9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><rect x="4.4" y="10.6" width="15.2" height="11" rx="3.2" fill="currentColor"/><circle cx="12" cy="15.4" r="1.7" fill="#FFFBF2"/><path d="M12 16.4v2.3" stroke="#FFFBF2" stroke-width="1.7" stroke-linecap="round"/></svg>';
+  /** A locked thing was tapped: gentle wiggle, a soft haptic and a toast that says what opens it. */
+  function lockedNudge(el, msg) {
+    sfx('blocked'); buzz('blocked'); toast(msg, 2200);
+    if (el && el.animate && !RM()) el.animate([{ transform: 'none' }, { transform: 'translateX(-5px) rotate(-1.5deg)' }, { transform: 'translateX(5px) rotate(1.5deg)' }, { transform: 'translateX(-3px) rotate(-1deg)' }, { transform: 'translateX(2px)' }, { transform: 'none' }], { duration: 420, easing: 'ease-out' });
+  }
   /** Dimming blocked tiles makes boards much easier: tutorial boards only, or by choice. */
   function dimOn() {
     if (P.settings.showBlocked) return true;
@@ -216,6 +230,12 @@
   const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
   function boardCard(b, next) {
     const l = LAYOUTS[b.layoutId];
+    if (!boardOpen(b.boardId)) {
+      // locked: padlock, dimmed + blurred layout preview, no stats
+      return `<button class="bcard locked" data-board="${b.boardId}" data-locked="1" aria-label="Board ${b.boardId}, locked. ${PG.lockReason(b.boardId)}">
+        <div class="num">${b.boardId}</div><div class="lock-prev">${shapeSVG(l)}</div><span class="lock-badge">${LOCK_SVG}</span><div class="nm">Locked</div></button>`;
+    }
+    const opening = justUnlocked === b.boardId;
     const cleared = P.cleared[b.boardId];
     const inProgress = P.current && P.current.boardId === b.boardId;
     const lucky = (b.bonusSets || []).includes('lucky');
@@ -225,8 +245,8 @@
     const bt = P.best && P.best[b.boardId];
     // one status pill, never two: a board in progress says Resume (even a cleared one being replayed), else Next
     const badge = inProgress ? '<span class="bpill resume">▶ Resume</span>' : !cleared && b.boardId === next ? '<span class="bpill">Next</span>' : '';
-    return `<button class="bcard${seasons ? ' seasons' : ''}${lucky ? ' lucky' : ''}${cleared ? ' done' : ''}${!cleared && b.boardId === next ? ' is-next' : ''}" data-board="${b.boardId}">
-        ${cleared ? '<div class="mini-seal">Cleared</div>' : ''}
+    return `<button class="bcard${seasons ? ' seasons' : ''}${lucky ? ' lucky' : ''}${cleared ? ' done' : ''}${!cleared && b.boardId === next ? ' is-next' : ''}${opening ? ' unlocking' : ''}" data-board="${b.boardId}">
+        ${opening ? `<span class="lock-pop" aria-hidden="true">${LOCK_SVG}</span>` : ''}${cleared ? '<div class="mini-seal">Cleared</div>' : ''}
         <div class="num">${b.boardId}</div>${shapeSVG(l)}<div class="nm">${l.name}</div>
         <div class="meta">${plural(l.tileCount, 'tile')} · ${plural(l.layers, 'layer')}${bonusLabel}</div>${cleared || b.hard || badge ? `<div class="bfoot">${badge}${cleared ? `<span class="stars" aria-label="${st} of 3 stars">${starStr(st)}</span>` : ''}${b.hard ? '<span class="hard-badge">Hard</span>' : ''}</div>` : ''}${bt ? `<div class="btime" aria-label="Best time ${fmtTime(bt)}">⏱ ${fmtTime(bt)}</div>` : ''}</button>`;
   }
@@ -239,7 +259,7 @@
     };
   }
   function renderHome() {
-    const next = (BOARDS.find((b) => !P.cleared[b.boardId]) || {}).boardId;
+    const next = homeTarget().id;
     const curCh = chapterOf(next || BOARDS.length);
     setScene(curCh.scene);
     startAmbience();
@@ -250,14 +270,17 @@
       const bs = BOARDS.filter((b) => b.boardId >= ch.from && b.boardId <= ch.to);
       const done = bs.filter((b) => P.cleared[b.boardId]).length;
       const stars = bs.reduce((a, b) => a + ((P.stars && P.stars[b.boardId]) || 0), 0);
-      const cats = (ch.newCats || []).map((id) => `<img src="${art(id)}" alt="" class="${(P.album[id] || 0) > 0 ? '' : 'unmet'}">`).join('');
-      const fresh = ch.n >= 4 && done === 0;
-      return `<section class="chapter" id="chapter-${ch.n}" data-chapter="${ch.n}">
-        <header class="chap chap-${ch.scene}" style="--scene:url('${new URL(`art/scenes/${ch.scene}.svg`, location.href).href}')">
+      const lk = PG.chapterLock(ch, P.cleared, lockOpts());
+      // locked chapters tease their cats as blurred silhouettes only (never a met face or a name)
+      const cats = (ch.newCats || []).map((id) => `<img src="${art(id)}" alt="" class="${!lk.locked && (P.album[id] || 0) > 0 ? '' : 'unmet'}">`).join('');
+      const fresh = !lk.locked && ch.n >= 4 && done === 0;
+      const opening = justUnlocked != null && justUnlocked === ch.from;
+      return `<section class="chapter${lk.locked ? ' is-locked' : ''}" id="chapter-${ch.n}" data-chapter="${ch.n}">
+        <header class="chap chap-${ch.scene}${lk.locked ? ' locked' : ''}${opening ? ' opening' : ''}" style="--scene:url('${new URL(`art/scenes/${ch.scene}.svg`, location.href).href}')">
           <div class="chap-body"><small>Chapter ${ch.n}${fresh ? ' <i class="chap-new">New</i>' : ''}</small><b>${ch.name}</b>
-          <span>Boards ${ch.from}–${ch.to} · ${done}/${bs.length} cleared · <em>★ ${stars}/${bs.length * 3}</em></span></div>
-          ${cats ? `<div class="chap-cats" aria-label="New cats">${cats}</div>` : ''}
-          <div class="chap-bar"><i style="width:${Math.round((done / bs.length) * 100)}%"></i></div>
+          ${lk.locked ? `<span class="chap-lock">${LOCK_SVG}Unlocks after Board ${lk.after}</span>` : `<span>Boards ${ch.from}–${ch.to} · ${done}/${bs.length} cleared · <em>★ ${stars}/${bs.length * 3}</em></span>`}</div>
+          ${cats ? `<div class="chap-cats${lk.locked ? ' locked' : ''}" aria-label="${lk.locked ? 'Cats you will meet in this chapter' : 'New cats'}">${cats}</div>` : ''}
+          ${lk.locked ? '' : `<div class="chap-bar"><i style="width:${Math.round((done / bs.length) * 100)}%"></i></div>`}
         </header>
         <div class="chap-grid">${bs.map((b) => boardCard(b, next)).join('')}</div></section>`;
     }).join('');
@@ -265,12 +288,31 @@
     $('albumCount').textContent = `${tot.common}/${tot.commonTotal} · ★${tot.rare}`;
     // the hero's Play button continues where you are, so home opens at the top (no pinned chapter label to go stale)
     const sc = $('homeScroll'); if (sc) sc.scrollTop = 0;
-    // Daily stub: unlocks after board 5
+    // a board the last win opened: scroll it into view, padlock pops open and the card brightens (once)
+    if (justUnlocked != null) {
+      const el = $('boardGrid').querySelector(`[data-board="${justUnlocked}"]`);
+      justUnlocked = null;
+      if (el) {
+        requestAnimationFrame(() => { try { el.scrollIntoView({ block: 'center' }); } catch (e) { /* */ } });
+        setTimeout(() => { sfx('star', 4); buzz('match'); }, RM() ? 0 : 520);
+      }
+    }
+    // Daily: opens after board 6 (PG.DAILY_AFTER, see src/progress.js); before that a locked teaser card
     const dailyBtn = $('btnDaily');
     if (dailyBtn) {
-      const unlocked = !!P.cleared[5] || clearedCount >= 5 || params.has('daily');
-      dailyBtn.hidden = !unlocked;
-      if (unlocked) {
+      const unlocked = dailyOpen();
+      dailyBtn.hidden = false;
+      dailyBtn.classList.toggle('locked', !unlocked);
+      dailyBtn.dataset.locked = unlocked ? '' : '1';
+      if (!unlocked) {
+        const d = new Date();
+        $('dailyMon').textContent = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+        $('dailyDay').textContent = String(d.getDate());
+        $('dailyLabel').textContent = "Today's puzzle";
+        $('dailyMeta').textContent = `Unlocks after Board ${PG.DAILY_AFTER}`;
+        dailyBtn.querySelector('.daily-go').innerHTML = LOCK_SVG;
+        dailyBtn.classList.remove('done');
+      } else {
         const key = todayKey();
         const done = !!(P.daily && P.daily[key]);
         dailyBtn.classList.toggle('done', done);
@@ -279,16 +321,17 @@
         $('dailyDay').textContent = done ? '✓' : String(d.getDate());
         $('dailyLabel').textContent = done ? 'Daily cleared!' : "Today's puzzle";
         $('dailyMeta').textContent = done ? 'A new one tomorrow · replay for fun' : `Same board for everyone · +${PAY.daily} bonus fish`;
-        dailyBtn.querySelector('.daily-go').textContent = done ? 'Replay' : 'Play';
+        dailyBtn.querySelector('.daily-go').textContent = P.current && P.current.isDaily ? 'Resume' : done ? 'Replay' : 'Play';
       }
     }
   }
   /** Home hero: the current chapter's scene, and one big button that continues (resume, else the next board). */
   function homeTarget() {
-    if (P.current && P.current.isDaily) return { daily: true };
-    if (P.current && BOARDS.some((b) => b.boardId === P.current.boardId)) return { id: P.current.boardId, resume: true };
-    const next = (BOARDS.find((b) => !P.cleared[b.boardId]) || {}).boardId;
-    return next ? { id: next } : { id: BOARDS.length, replay: true };
+    // v5.4: always the furthest board unlocked by progress that isn't cleared yet (resumed if it's the board in progress).
+    // The developer "Unlock all boards" override doesn't move it: it follows real progress.
+    const t = PG.playTarget(P.cleared, BOARDS.length);
+    if (P.current && !P.current.isDaily && P.current.boardId === t.id) return { id: t.id, resume: true };
+    return t.replay ? { id: t.id, replay: true } : { id: t.id };
   }
   function renderHero(next, curCh) {
     const t = homeTarget();
@@ -300,7 +343,10 @@
     $('btnPlay').classList.toggle('resume', !!(t.resume || t.daily));
   }
   $('boardGrid').addEventListener('click', (e) => {
-    const c = e.target.closest('[data-board]'); if (c) startBoard(Number(c.dataset.board));
+    const c = e.target.closest('[data-board]'); if (!c) return;
+    const id = Number(c.dataset.board);
+    if (!boardOpen(id)) { lockedNudge(c, PG.lockReason(id)); return; }
+    startBoard(id);
   });
 
   function starStr(n) { return '<b>' + '★'.repeat(n) + '</b>' + '☆'.repeat(3 - n); }
@@ -310,13 +356,17 @@
   // ---------------------------------------------------------------- album
   function renderAlbum() {
     const metAll = params.has('albumAll');
-    const suits = (D.cats.suits || []).map((x) => [x.name + (x.chapter ? ` · Chapter ${x.chapter}` : ''), (c) => c.suit === x.id]);
-    const groups = suits.concat([['Seasons', (c) => c.bonusSet === 'seasons'], ['Lucky', (c) => c.bonusSet === 'lucky']]);
-    let html = groups.map(([name, f]) => {
+    // v5.4 locks: a group whose first board is still locked shows sealed cards ("Unlocks after Board N"), not hints
+    const firstBoardOf = (set) => (BOARDS.find((b) => (b.bonusSets || []).includes(set)) || {}).boardId;
+    const suits = (D.cats.suits || []).map((x) => [x.name + (x.chapter ? ` · Chapter ${x.chapter}` : ''), (c) => c.suit === x.id, x.chapter ? (CHAPTERS.find((ch) => ch.n === x.chapter) || {}).from : null]);
+    const groups = suits.concat([['Seasons', (c) => c.bonusSet === 'seasons', firstBoardOf('seasons')], ['Lucky', (c) => c.bonusSet === 'lucky', firstBoardOf('lucky')]]);
+    let html = groups.map(([name, f, from]) => {
       const cs = D.cats.cats.filter(f);
       const n = cs.filter((c) => metAll || (P.album[c.id] || 0) > 0).length;
-      return `<h4>${name} <small>${n}/${cs.length}</small></h4><div class="album-grid">${cs.map((c) => {
+      const sealed = !metAll && from > 1 && !boardOpen(from) && n === 0;
+      return `<h4${sealed ? ' class="sealed-h"' : ''}>${name} ${sealed ? `<small class="lock-note">${LOCK_SVG}Unlocks after Board ${from - 1}</small>` : `<small>${n}/${cs.length}</small>`}</h4><div class="album-grid">${cs.map((c) => {
         const k = P.album[c.id] || 0; const isMet = k > 0 || metAll;
+        if (sealed) return `<div class="acard locked sealed"><img src="${art(c.id)}" alt=""><div><b>???</b><small>Unlocks after Board ${from - 1}.</small></div></div>`;
         return `<div class="acard${isMet ? '' : ' locked'}"><img src="${art(c.id)}" alt=""><div><b>${isMet ? c.name : '???'}</b><small>${isMet ? c.bio : 'Match this cat to meet them.'}</small>${isMet ? `<span class="stamp">● met${k >= 50 ? ' ● 50' : ''}${k >= 200 ? ' ● 200' : ''}</span>` : ''}</div></div>`;
       }).join('')}</div>`;
     }).join('');
@@ -325,13 +375,14 @@
     const rareCats = D.cats.cats.filter((c) => c.rarity);
     const found = rareCats.filter((c) => metAll || (P.rares[c.id] || 0) > 0).length;
     const odds = RS ? RS.odds({}) : null;
+    const raresSealed = !metAll && RS && !boardOpen(RS.FIRST_BOARD);
     html = `<div class="rare-head"><h4>Rare cats <small>${found}/${rareCats.length} found</small></h4>
       <p>Rare cats sometimes sneak onto a board (from board 4). Match one to collect it.${odds ? ` Odds per board: Rare ${Math.round(odds.rare * 100)}% · Epic ${Math.round(odds.epic * 100)}% · Legendary ${Math.round(odds.legendary * 100)}%, a bit more on Hard boards and the longer you go without one.` : ''}</p></div>` +
       tiers.map((t) => {
         const cs = rareCats.filter((c) => c.rarity === t.id);
         return `<h5 class="tier-h tier-${t.id}">${t.name}</h5><div class="album-grid rare-grid">${cs.map((c) => {
           const k = P.rares[c.id] || 0, isMet = k > 0 || metAll;
-          return `<div class="acard rcard tier-${c.rarity}${isMet ? '' : ' locked'}"><img src="${art(c.id)}" alt=""><div><i class="tier-chip">${t.name}</i><b>${isMet ? c.name : '?'}</b><small>${isMet ? c.bio : 'Not found yet. Keep playing!'}</small>${isMet ? `<span class="stamp">Matched ×${k}</span>` : ''}</div></div>`;
+          return `<div class="acard rcard tier-${c.rarity}${isMet ? '' : ' locked'}${!isMet && raresSealed ? ' sealed' : ''}"><img src="${art(c.id)}" alt=""><div><i class="tier-chip">${t.name}</i><b>${isMet ? c.name : '?'}</b><small>${isMet ? c.bio : raresSealed ? `Rare cats appear from Board ${RS.FIRST_BOARD}. Beat Board ${RS.FIRST_BOARD - 1} first.` : 'Not found yet. Keep playing!'}</small>${isMet ? `<span class="stamp">Matched ×${k}</span>` : ''}</div></div>`;
         }).join('')}</div>`;
       }).join('') + html;
     $('albumList').innerHTML = html;
@@ -410,6 +461,14 @@
 
   function startBoard(id, opts) {
     opts = opts || {};
+    // v5.4 guard for every way into a board: cards, Play, Next, Resume, Daily, deep links / URL params, test hooks
+    const gate = PG.canStart(id === 'daily' || opts.daily ? 'daily' : Number(id), P, lockOpts());
+    if (!gate.ok) {
+      toast(gate.reason, 2600); // no haptic here: deep links / Resume run without a tap (taps on locked cards buzz via lockedNudge)
+      if (!board || $('play').hidden) { board = null; resetFly(); renderHome(); show('home'); }
+      return false;
+    }
+    if (justUnlocked != null && justUnlocked === Number(id)) justUnlocked = null; // played it: no "new" animation later
     resetFly();
     pre.full = -1; pre.win = false;
     if (id === 'daily' || opts.daily) board = dailyBoardDef();
@@ -460,6 +519,7 @@
       if (cards.length) setTimeout(() => { if (sg === startGen) cards.forEach((k) => tipCard(k)); }, RM() ? 60 : 760);
     });
     if (game.isStuck()) setTimeout(showDead, 300);
+    return true;
   }
 
   /** Smooth board entry: tiles settle in layer by layer (transform/opacity only). */
@@ -1218,7 +1278,10 @@
   function win() {
     if (!game || !game.isWon() || !$('win').hidden) return;
     const first = !P.cleared[board.boardId];
+    const opened = board.isDaily ? null : PG.newlyUnlocked(P.cleared, board.boardId, BOARDS.length);
+    const dailyOpened = !board.isDaily && board.boardId === PG.DAILY_AFTER && !PG.dailyUnlocked(P.cleared, P.daily);
     P.cleared[board.boardId] = true;
+    justUnlocked = opened;
     const stars = starsFor(P.current);
     if (!board.isDaily) { P.stars = P.stars || {}; P.stars[board.boardId] = Math.max(P.stars[board.boardId] || 0, stars); }
     const bonus = P.current.usedHelp ? 0 : PAY.noHelp, chains = Math.min(PAY.chainMax, P.current.chains || 0);
@@ -1239,7 +1302,7 @@
     sfx('win'); if (!pre.win) buzz('win');
     pre.win = false;
     $('winTitle').textContent = board.isDaily ? (`Daily · ` + todayKey()) : (`Board ${board.boardId} · ${layout.name}`);
-    const extra = first && board.boardId === 3 ? ' · Album unlocked' : (first && board.boardId === 5 ? ' · Daily unlocked' : (board.isDaily ? ' · Daily stamp!' : ''));
+    const extra = first && board.boardId === 3 ? ' · Album unlocked' : (dailyOpened ? ' · Daily unlocked' : (board.isDaily ? ' · Daily stamp!' : ''));
     $('winText').textContent = `${moves} pairs · +${awarded} fish${bonus ? ' (no-help bonus!)' : ''}${chains ? ` · ${chains} purr chain${chains > 1 ? 's' : ''}` : ''}${extra}`;
     // first fish ever earned: a one-time callout on the win card, with a link to the fish sheet
     const firstFish = !noTips && !(P.tipsSeen = P.tipsSeen || {}).fishEarned;
@@ -1259,6 +1322,7 @@
     wn.hidden = !newRares.length;
     wn.innerHTML = newRares.map((id) => `<div class="win-new-cat tier-${CATS[id].rarity}"><img src="${art(id)}" alt=""><div><b>New cat collected!</b><span>${RS.TIERS[CATS[id].rarity].name} · ${CATS[id].name}</span></div></div>`).join('');
     $('winStarsNote').textContent = stars === 3 ? 'Perfect: no hints, shuffles or undos' : stars === 2 ? 'No hints or shuffles (3 stars = no undos too)' : '3 stars = no hints, shuffles or undos';
+    showWinUnlock(opened);
     if (board.isDaily) $('btnNext').textContent = 'Boards';
     else $('btnNext').textContent = board.boardId < BOARDS.length ? 'Next' : 'Boards';
     const cats = [...new Set(game.faces.map(skin))].filter((f) => CATS[f] && !CATS[f].bonusSet).sort((a, b) => (CATS[b].rarity ? 1 : 0) - (CATS[a].rarity ? 1 : 0));
@@ -1268,6 +1332,17 @@
     resetFly();
     celebrate(cats, stars);
     if (record) celebrateRecord();
+  }
+  /** Win card: "Board N unlocked!" with the padlock popping open (and the chapter when N starts one). */
+  function showWinUnlock(id) {
+    const w = $('winUnlock');
+    w.hidden = !id; w.classList.remove('go');
+    if (!id) return;
+    const nb = BOARDS.find((x) => x.boardId === id), ch = chapterOf(id);
+    $('winUnlockTitle').textContent = ch.from === id && ch.n > 1 ? `Chapter ${ch.n} unlocked!` : `Board ${id} unlocked!`;
+    $('winUnlockSub').textContent = ch.from === id && ch.n > 1 ? `${ch.name} · starts with Board ${id}` : `Next up: ${LAYOUTS[nb.layoutId].name}${nb.hard ? ' · Hard' : ''}`;
+    void w.offsetWidth; w.classList.add('go');
+    setTimeout(() => { if (!$('win').hidden) { sfx('star', 5); buzz('match'); } }, RM() ? 0 : 1500);
   }
   /** "New record!": a stamp pop, a bright chime run and a success haptic once the stars have landed. */
   function celebrateRecord() {
@@ -1360,10 +1435,13 @@
     $('winDouble').hidden = true; refresh(); toast(`+${extra} fish!`, 1800); sfx('star', 3);
   }));
   $('btnPlay').addEventListener('click', click(() => {
-    const t = homeTarget();
-    if (t.daily) startBoard('daily', { daily: true }); else startBoard(t.id);
+    startBoard(homeTarget().id);
   }));
-  if ($('btnDaily')) $('btnDaily').addEventListener('click', click(() => startBoard('daily', { daily: true, restart: true })));
+  if ($('btnDaily')) $('btnDaily').addEventListener('click', () => {
+    if (!dailyOpen()) { lockedNudge($('btnDaily'), `Beat Board ${PG.DAILY_AFTER} to unlock the Daily`); return; }
+    sfx('click'); buzz('click');
+    startBoard('daily', { daily: true, restart: !(P.current && P.current.isDaily) }); // resume an unfinished Daily
+  });
   $('btnWinHome').addEventListener('click', click(() => { const b = board; $('win').hidden = true; afterBoard(b, () => { renderHome(); show('home'); }); }));
   $('btnAlbum').addEventListener('click', click(() => { renderAlbum(); show('album'); }));
   $('btnAlbumBack').addEventListener('click', click(() => { renderHome(); show('home'); }));
@@ -1665,9 +1743,15 @@
     ];
     $('devStatus').innerHTML = lines.join('<br>');
     $('optAdFast').checked = !!m.dev.fastRules;
+    $('optUnlockAll').checked = unlockAll(); $('optUnlockAll').disabled = params.has('unlockall');
   }
   $('devBox').hidden = !MCFG.testMode && !params.has('dev');
   setInterval(() => { if (!$('setSheet').hidden && !$('devBox').hidden) devStatus(); }, 1000);
+  $('optUnlockAll').addEventListener('change', () => {
+    P.settings.unlockAll = $('optUnlockAll').checked; save(); devStatus();
+    toast(P.settings.unlockAll ? 'All boards unlocked for testing.' : 'Locks back on: boards open as you beat them.', 2200);
+    if (!$('home').hidden) renderHome();
+  });
   $('optAdFast').addEventListener('change', () => { P.monetize.dev.fastRules = $('optAdFast').checked; save(); devStatus(); });
   $('devInter').addEventListener('click', click(async () => { await MON.showInterstitial('dev_force'); devStatus(); }));
   $('devReward').addEventListener('click', click(async () => { const r = await MON.showRewarded('freeFish', true); toast(r.rewarded ? 'Rewarded test ad completed (no reward granted from the dev button).' : 'Closed early: no reward.', 2600); devStatus(); }));
@@ -1681,6 +1765,7 @@
     get rare() { return rare; }, get hintMarks() { return hintMarks; }, get profile() { return P; },
     get tipOpen() { return tipOpen; }, clockRunning, openHowto,
     get coach() { return { tile: coachI, under: coachU, stage: coachStage }; }, openFish, openStore, MON, MZ, devStatus,
+    PG, startBoard, boardOpen, dailyOpen, renderHome, homeTarget, get justUnlocked() { return justUnlocked; },
   };
 
   document.addEventListener('touchstart', () => {}, { passive: true }); // lets iOS Safari apply :active (button press-down)
@@ -1690,15 +1775,16 @@
   if (migratedNote) { save(); setTimeout(() => toast(migratedNote, 4600), 700); }
   const scr = params.get('screen');
   if (params.has('daily')) {
-    startBoard('daily', { daily: true, restart: true });
+    startBoard('daily', { daily: true, restart: true }); // guarded: locked Daily -> home + toast
   } else if (params.has('board')) {
-    startBoard(Number(params.get('board')), { restart: params.has('fresh') });
+    if (startBoard(Number(params.get('board')), { restart: params.has('fresh') })) {
     const k = Number(params.get('moves') || 0);
     for (let m = 0; m < k && game.solution && m < game.solution.length; m++) game.tap(game.solution[m]);
     if (k) { persist(); refresh(); renderTrayInstant(); }
     if (params.has('hint')) hint();
     if (params.has('win')) { for (const t of game.solution) if (game.present[t]) game.tap(t); renderTrayInstant(); win(); }
     if (params.has('dead')) showDead();
+    }
   } else if (scr === 'album') { renderAlbum(); show('album'); }
   else if (P.current) { startBoard(P.current.boardId); }
   else if (Object.keys(P.cleared).length === 0 && scr !== 'home') { startBoard(1); } // Section 9: board 1 is already dealt

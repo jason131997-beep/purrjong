@@ -15,9 +15,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Purrjong">
-<meta name="purrjong-version" content="5.3.0-202610072238">
-<link rel="stylesheet" href="src/tile.css?v=5.3.0-202610072238">
-<link rel="stylesheet" href="src/app.css?v=5.3.0-202610072238">
+<meta name="purrjong-version" content="5.4.0-202610072304">
+<link rel="stylesheet" href="src/tile.css?v=5.4.0-202610072304">
+<link rel="stylesheet" href="src/app.css?v=5.4.0-202610072304">
 </head>
 <body>
 <div class="scene" id="scene" aria-hidden="true"></div>
@@ -43,7 +43,7 @@
       <div class="daily-cal" aria-hidden="true"><small id="dailyMon">OCT</small><b id="dailyDay">7</b></div>
       <div class="daily-body">
         <strong id="dailyLabel">Today's puzzle</strong>
-        <span id="dailyMeta">Unlocks after board 5</span>
+        <span id="dailyMeta">Unlocks after Board 6</span>
       </div>
       <span class="daily-go">Play</span>
       <img class="daily-peek" src="art/cats/lucky-gold.svg" alt="" aria-hidden="true">
@@ -138,8 +138,9 @@
     <button class="row row-btn" id="optResetTips"><span>Reset tips<small>Show the one-time tip cards again</small></span><i aria-hidden="true">↺</i></button>
     <button class="row row-btn" id="optShop"><span>Shop<small>Remove Ads, fish packs, Restore Purchases</small></span><i aria-hidden="true">›</i></button>
     <div class="dev-box" id="devBox">
-      <h4>Developer: ad test mode</h4>
+      <h4>Developer: test mode</h4>
       <p class="dev-status" id="devStatus"></p>
+      <label class="row"><span>Unlock all boards<small>Testing only: play any board and the Daily. Off by default (?unlockall=1 for scripts)</small></span><input type="checkbox" id="optUnlockAll"></label>
       <label class="row"><span>Fast test rules<small>30 s instead of 3 min, any board, first session OK</small></span><input type="checkbox" id="optAdFast"></label>
       <div class="dev-btns"><button class="pill ghost small" id="devInter">Force interstitial</button><button class="pill ghost small" id="devReward">Force rewarded</button><button class="pill ghost small" id="devResetBuys">Reset purchases</button></div>
     </div>
@@ -201,6 +202,7 @@
       <div class="win-new" id="winNew" hidden></div>
       <small class="win-stars-note" id="winStarsNote"></small>
       <p id="winText"></p>
+      <div class="win-unlock" id="winUnlock" hidden><span class="wu-lock" aria-hidden="true"><svg class="padlock" viewBox="0 0 24 24"><path class="shackle" d="M7.6 11.2V8.3a4.4 4.4 0 0 1 8.8 0v2.9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><rect x="4.4" y="10.6" width="15.2" height="11" rx="3.2" fill="currentColor"/><circle cx="12" cy="15.4" r="1.7" fill="#FFFBF2"/><path d="M12 16.4v2.3" stroke="#FFFBF2" stroke-width="1.7" stroke-linecap="round"/></svg></span><span class="wu-txt"><b id="winUnlockTitle">Board 2 unlocked!</b><small id="winUnlockSub"></small></span></div>
       <button class="pill ad-pill win-double" id="winDouble" hidden><i class="ad-play" aria-hidden="true">▶</i> <span id="winDoubleText">Double your fish</span></button>
       <div class="win-fish" id="winFish" hidden><span class="win-fish-ico" aria-hidden="true">🐟</span><span><b>Your first fish!</b> Fish buy extra hints, shuffles, undos and revives.</span><button class="win-fish-more" id="winFishMore">What are fish?</button></div>
       <button class="pill big" id="btnNext">Next</button>
@@ -228,12 +230,13 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<script src="data/data.js?v=5.3.0-202610072238"></script>
-<script src="src/core.js?v=5.3.0-202610072238"></script>
-<script src="src/rares.js?v=5.3.0-202610072238"></script>
-<script src="src/audio.js?v=5.3.0-202610072238"></script>
-<script src="src/haptics.js?v=5.3.0-202610072238"></script>
-<script src="src/monetize.js?v=5.3.0-202610072238"></script>
-<script src="src/app.js?v=5.3.0-202610072238"></script>
+<script src="data/data.js?v=5.4.0-202610072304"></script>
+<script src="src/core.js?v=5.4.0-202610072304"></script>
+<script src="src/rares.js?v=5.4.0-202610072304"></script>
+<script src="src/audio.js?v=5.4.0-202610072304"></script>
+<script src="src/haptics.js?v=5.4.0-202610072304"></script>
+<script src="src/monetize.js?v=5.4.0-202610072304"></script>
+<script src="src/progress.js?v=5.4.0-202610072304"></script>
+<script src="src/app.js?v=5.4.0-202610072304"></script>
 </body>
 </html>
