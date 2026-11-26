@@ -11,7 +11,7 @@
   const RS = window.PurrRares;
   const PG = window.PurrProgress; // v5.4 level locks (src/progress.js)
   const MZ = window.PurrMonetize, MCFG = D.monetize || { interstitial: { enabled: false }, rewarded: { placements: {} }, products: [] };
-  // v5 chapters: boards 1-30 become chapters 1-3 (their old scenes); chapters 4-8 are boards 31-80.
+  // v5 chapters: boards 1-30 become chapters 1-3 (their old scenes); chapters 4-8 are boards 31-80; chapters 9-11 (boards 81-110) revisit the night market, grove and moon scenes.
   const CHAPTERS = D.boards.chapters || [{ n: 1, id: 'garden', name: 'Tea Garden', scene: 'garden', from: 1, to: BOARDS.length, newCats: [] }];
   const chapterOf = (id) => CHAPTERS.find((c) => id >= c.from && id <= c.to) || CHAPTERS[0];
   const SCENES = ['garden', 'teahouse', 'nightmarket', 'grove', 'pond', 'blossom', 'snowy', 'moonlit'];
