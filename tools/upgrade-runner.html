@@ -1,0 +1,147 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>upgrade runner</title>
+<pre id="results">running…</pre>
+<script>
+(function () {
+  const STORE = 'purrjong.v2';
+  function preMergeSave(clearedEmpty) {
+    const cleared = {}, stars = {}, best = {}, album = { tuxedo: 8, calico: 8, usagi: 4 };
+    for (let i = 1; i <= 80; i++) { if (!clearedEmpty) cleared[i] = true; stars[i] = (i % 3) + 1; best[i] = 45000 + i * 10; }
+    return {
+      v: 4, fish: 880, hints: 2, shuffles: 1, cleared, stars, best, album,
+      daily: { '2026-11-01': true }, rares: {}, rareState: { pity: 2, last: null },
+      tipsSeen: { shelf3: true }, howtoSeen: true,
+      monetize: { v: 1, adFree: false, owned: {}, purchases: [], sessions: 12, lastSeenAt: Date.now() - 3600000, playMsSinceAd: 0, boardsSinceAd: 0, lastInterstitialAt: 0, lastRewardedAt: 0, interstitials: 0, rewardedTotal: 0, rewardedDay: { day: '', count: 0, by: {} }, pendingRare: 0, dev: { fastRules: false } },
+      settings: { showBlocked: false, marks: false, motion: true, sound: false, music: false, sfxVol: 0.7, musicVol: 0.3, haptics: false, track: 'rotate', trackIdx: 0, unlockAll: false },
+      current: null, coachDone: { 1: true, 2: true, 3: true }
+    };
+  }
+  function parseHome(doc) {
+    const cards = [...doc.querySelectorAll('button.bcard[data-board]')].map((el) => ({
+      id: +el.dataset.board,
+      locked: el.classList.contains('locked'),
+      done: el.classList.contains('done'),
+    }));
+    const chapters = [...doc.querySelectorAll('section.chapter[data-chapter], section.chapter[id^="chapter-"]')].map((el) => ({
+      n: +(el.dataset.chapter || (el.id || '').replace('chapter-', '')),
+      locked: el.classList.contains('is-locked'),
+    }));
+    const play = (doc.getElementById('playLabel') || {}).textContent || '';
+    const visible = (doc.getElementById('home') || {}).hidden === false;
+    return {
+      count: cards.length,
+      done: cards.filter((c) => c.done).map((c) => c.id),
+      locked: cards.filter((c) => c.locked).map((c) => c.id),
+      open: cards.filter((c) => !c.locked).map((c) => c.id),
+      chapters, play, visible,
+      errors: (window.__frameErrors || []).slice()
+    };
+  }
+  function loadFrame(url) {
+    return new Promise((resolve, reject) => {
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'width:430px;height:900px;border:0;display:block';
+      const started = Date.now();
+      const timer = setTimeout(() => reject(new Error('timeout ' + url + ' after ' + (Date.now() - started) + 'ms')), 12000);
+      const poll = () => {
+        try {
+          const doc = iframe.contentDocument;
+          if (doc && doc.querySelector('button.bcard[data-board], section.chapter')) {
+            clearTimeout(timer);
+            return resolve({ doc, win: iframe.contentWindow, iframe });
+          }
+        } catch (e) { clearTimeout(timer); return reject(e); }
+        setTimeout(poll, 50);
+      };
+      iframe.onload = () => setTimeout(poll, 50);
+      iframe.onerror = () => { clearTimeout(timer); reject(new Error('iframe error ' + url)); };
+      iframe.src = url;
+      document.body.appendChild(iframe);
+    });
+  }
+  function snapshotStorage() {
+    const data = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      data[k] = localStorage.getItem(k);
+    }
+    return data;
+  }
+
+  const out = { tests: [] };
+  function check(name, cond, detail) { out.tests.push({ name, ok: !!cond, detail: detail == null ? undefined : detail }); }
+
+  (async () => {
+    // 1. Pre-merge save -> old game -> new game
+    localStorage.clear();
+    localStorage.setItem(STORE, JSON.stringify(preMergeSave(false)));
+    const old = await loadFrame('/old/index.html?screen=home&notips');
+    out.oldHome = parseHome(old.doc);
+    check('old game has 80 boards', out.oldHome.count === 80, out.oldHome.count);
+    check('old game shows all 80 as cleared', out.oldHome.done.length === 80 && out.oldHome.locked.length === 0, { done: out.oldHome.done.length, locked: out.oldHome.locked.length });
+    old.iframe.remove();
+
+    const neu = await loadFrame('/new/index.html?screen=home&notips');
+    out.newHome = parseHome(neu.doc);
+    check('new game has 110 boards', out.newHome.count === 110, out.newHome.count);
+    check('cleared seals 1-80 survived the upgrade', out.newHome.done.length === 80 && out.newHome.done[0] === 1 && out.newHome.done[79] === 80, out.newHome.done.length);
+    check('boards 1-81 are open after upgrade', out.newHome.open.length === 81 && out.newHome.open[80] === 81, { n: out.newHome.open.length, last: out.newHome.open[out.newHome.open.length - 1] });
+    check('boards 82-110 are locked', out.newHome.locked[0] === 82 && out.newHome.locked.length === 29, { first: out.newHome.locked[0], n: out.newHome.locked.length });
+    check('Play button continues at board 81', /Play Board 81/.test(out.newHome.play), out.newHome.play);
+    const ch = Object.fromEntries(out.newHome.chapters.map((c) => [c.n, c.locked]));
+    check('chapters 1-9 open, 10-11 locked', ch[1] === false && ch[8] === false && ch[9] === false && ch[10] === true && ch[11] === true, ch);
+    const saved = JSON.parse(localStorage.getItem(STORE) || 'null');
+    check('fish still 880 after new build loaded', saved && saved.fish === 880, saved && saved.fish);
+    check('cleared still 80 after new build loaded', saved && Object.keys(saved.cleared).filter((k) => saved.cleared[k]).length === 80, saved && Object.keys(saved.cleared || {}).length);
+    check('stars still 80 after new build loaded', saved && Object.keys(saved.stars).length === 80);
+    neu.iframe.remove();
+
+    // 2. Fresh profile (?fresh): 1-80 open, 81+ locked, Play is board 1
+    const fresh = await loadFrame('/new/index.html?screen=home&notips&fresh');
+    out.fresh = parseHome(fresh.doc);
+    check('fresh profile still has 110 boards', out.fresh.count === 110, out.fresh.count);
+    check('fresh profile: 1-80 open (not locked)', out.fresh.open.length === 80 && out.fresh.open[0] === 1 && out.fresh.open[79] === 80, { n: out.fresh.open.length, first: out.fresh.open[0], last: out.fresh.open[out.fresh.open.length - 1] });
+    check('fresh profile: 81-110 locked', out.fresh.locked[0] === 81 && out.fresh.locked.length === 30, { first: out.fresh.locked[0], n: out.fresh.locked.length });
+    check('fresh profile: Play Board 1', /Play Board 1/.test(out.fresh.play), out.fresh.play);
+    check('fresh profile: no cleared seals', out.fresh.done.length === 0, out.fresh.done.length);
+    const fch = Object.fromEntries(out.fresh.chapters.map((c) => [c.n, c.locked]));
+    check('fresh profile: chapters 1-8 open, 9-11 locked', fch[8] === false && fch[9] === true, fch);
+    fresh.iframe.remove();
+
+    // 3. Stars-only save (cleared missing) is recovered
+    localStorage.clear();
+    localStorage.setItem(STORE, JSON.stringify(preMergeSave(true)));
+    const rec = await loadFrame('/new/index.html?screen=home&notips');
+    out.recovered = parseHome(rec.doc);
+    check('stars-only save recovered 80 cleared seals', out.recovered.done.length === 80, out.recovered.done.length);
+    check('stars-only save opens board 81', out.recovered.open.includes(81) && out.recovered.locked[0] === 82, { open81: out.recovered.open.includes(81), firstLocked: out.recovered.locked[0] });
+    rec.iframe.remove();
+
+    // 4. Legacy key purrjong.v1 is migrated
+    localStorage.clear();
+    localStorage.setItem('purrjong.v1', JSON.stringify(preMergeSave(false)));
+    const mig = await loadFrame('/new/index.html?screen=home&notips');
+    out.legacy = parseHome(mig.doc);
+    check('legacy key purrjong.v1 loaded 80 cleared', out.legacy.done.length === 80, out.legacy.done.length);
+    check('legacy key still present (not destroyed)', localStorage.getItem('purrjong.v1') != null);
+    mig.iframe.remove();
+
+    // 5. Broken JSON is not overwritten
+    localStorage.clear();
+    localStorage.setItem(STORE, '{not json');
+    const bro = await loadFrame('/new/index.html?screen=home&notips');
+    out.broken = parseHome(bro.doc);
+    check('broken purrjong.v2 left in place', localStorage.getItem(STORE) === '{not json', localStorage.getItem(STORE));
+    check('broken save copied to sidecar', (localStorage.getItem(STORE + '.broken') || '').startsWith('{not json'), snapshotStorage());
+    bro.iframe.remove();
+
+    out.failed = out.tests.filter((t) => !t.ok).length;
+    document.getElementById('results').textContent = JSON.stringify(out, null, 2);
+    document.title = out.failed ? 'FAIL ' + out.failed : 'ALL_OK ' + out.tests.length;
+  })().catch((e) => {
+    document.getElementById('results').textContent = JSON.stringify({ error: String(e && e.stack || e) });
+    document.title = 'ERROR';
+  });
+})();
+</script>
