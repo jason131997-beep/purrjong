@@ -1,10 +1,11 @@
-/* Purrjong level locks (v5.4). Pure functions, node-testable; app.js uses window.PurrProgress.
-   Rule: board 1 is always open; board N+1 opens once board N is cleared. There is no stored "unlocked" list:
+/* Purrjong level locks (v5.4, v5.5.1 classic-campaign open). Pure functions, node-testable; app.js uses window.PurrProgress.
+   Rule: boards 1–CLASSIC_THROUGH (the original 80-board campaign) are always open. Board 81 opens once board 80 is
+   cleared, and each new board after that opens once the previous one is cleared. There is no stored "unlocked" list:
    it is derived from P.cleared, so every existing save keeps each board it has cleared plus the board after it
    (that is the whole save migration, even for saves that skipped around before locks existed).
    The Daily opens after board 6 (the dimmed tutorial boards 1-5 plus the first full board); anyone who already
    played a Daily keeps it. Developer "Unlock all boards" / ?unlockall=1 opens everything for testing, but the
-   home Play button still follows real progress. */
+   home Play button still follows real progress (the first unlocked board that is not cleared yet). */
 (function (root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -12,22 +13,25 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
   const DAILY_AFTER = 6;
+  // Original campaign (chapters 1–8). Always playable; the 30 boards added in v5.5 stay gated.
+  const CLASSIC_THROUGH = 80;
   const isCleared = (cleared, id) => !!(cleared && (cleared[id] || cleared[String(id)]));
 
   /** Unlocked by progress alone (ignores the developer override). */
   function earned(cleared, id) {
     id = Number(id);
     if (!(id >= 1)) return false;
-    return id === 1 || isCleared(cleared, id) || isCleared(cleared, id - 1);
+    if (id <= CLASSIC_THROUGH) return true;
+    return isCleared(cleared, id) || isCleared(cleared, id - 1);
   }
   /** Can this board be played? opts.unlockAll = developer override. */
   function isUnlocked(cleared, id, opts) {
     if (opts && opts.unlockAll) return Number(id) >= 1;
     return earned(cleared, id);
   }
-  /** Home Play target: the furthest board unlocked by progress that is not cleared yet; all cleared = replay the last. */
+  /** Home Play target: the first board unlocked by progress that is not cleared yet; all cleared = replay the last. */
   function playTarget(cleared, total) {
-    for (let id = total; id >= 1; id--) if (earned(cleared, id) && !isCleared(cleared, id)) return { id, replay: false };
+    for (let id = 1; id <= total; id++) if (earned(cleared, id) && !isCleared(cleared, id)) return { id, replay: false };
     return { id: total, replay: true };
   }
   /** 'Beat Board 7 to unlock' for board 8. */
@@ -64,5 +68,5 @@
     for (let id = 1; id <= total; id++) if (earned(cleared, id)) h = id;
     return h;
   }
-  return { DAILY_AFTER, earned, isUnlocked, playTarget, lockReason, chapterLock, newlyUnlocked, dailyUnlocked, canStart, highestEarned };
+  return { DAILY_AFTER, CLASSIC_THROUGH, earned, isUnlocked, playTarget, lockReason, chapterLock, newlyUnlocked, dailyUnlocked, canStart, highestEarned };
 });

@@ -12,6 +12,7 @@
   const PG = window.PurrProgress; // v5.4 level locks (src/progress.js)
   const MZ = window.PurrMonetize, MCFG = D.monetize || { interstitial: { enabled: false }, rewarded: { placements: {} }, products: [] };
   // v5 chapters: boards 1-30 become chapters 1-3 (their old scenes); chapters 4-8 are boards 31-80; chapters 9-11 (boards 81-110) revisit the night market, grove and moon scenes.
+  // v5.5.1: boards 1–80 stay open for everyone; board 81 opens after 80 is cleared (see src/progress.js).
   const CHAPTERS = D.boards.chapters || [{ n: 1, id: 'garden', name: 'Tea Garden', scene: 'garden', from: 1, to: BOARDS.length, newCats: [] }];
   const chapterOf = (id) => CHAPTERS.find((c) => id >= c.from && id <= c.to) || CHAPTERS[0];
   const SCENES = ['garden', 'teahouse', 'nightmarket', 'grove', 'pond', 'blossom', 'snowy', 'moonlit'];
@@ -22,6 +23,8 @@
   const app = $('app');
   const params = new URLSearchParams(location.search);
   const STORE = 'purrjong.v2';
+  // Older keys we still read (the live game has only ever written purrjong.v2; these are a safety net).
+  const STORE_LEGACY = ['purrjong.v1', 'purrjong', 'purrjong.profile'];
   const noSave = params.has('fresh');
   // Economy v3 ("harder" retune): help is scarce. See README "Fish economy".
   const HELP_COST = 60;          // fish per hint or shuffle once the free stock is gone
@@ -37,38 +40,71 @@
   // ---------------------------------------------------------------- profile + save
   const defaults = () => ({ v: PROFILE_VERSION, fish: 20, hints: 1, shuffles: 1, cleared: {}, stars: {}, best: {}, album: {}, daily: {}, rares: {}, rareState: { pity: 0, last: null }, tipsSeen: {}, howtoSeen: false, monetize: MZ.freshState(), settings: { showBlocked: false, marks: false, motion: false, sound: true, music: true, sfxVol: 0.7, musicVol: 0.3, haptics: true, track: 'rotate', trackIdx: 0, unlockAll: false }, current: null, coachDone: {} });
   let migratedNote = '';
+  let loadFailed = false; // if a save exists but cannot be parsed, never overwrite it with a blank profile
+  let needsPersist = false; // loaded from a legacy key, or cleared was rebuilt from stars/best
+  function readRawSave() {
+    if (typeof localStorage === 'undefined') return { raw: null, key: null };
+    for (const key of [STORE].concat(STORE_LEGACY)) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) return { raw, key };
+      } catch (e) { /* private mode, etc. */ }
+    }
+    return { raw: null, key: null };
+  }
+  // Stars and best times are only written on a win, same as cleared; use them if cleared was missing.
+  function recoverCleared(p) {
+    p.cleared = p.cleared || {};
+    for (const src of [p.stars, p.best]) {
+      if (!src || typeof src !== 'object') continue;
+      for (const k of Object.keys(src)) if (Number(k) >= 1 && src[k]) p.cleared[k] = p.cleared[k] || true;
+    }
+    return p;
+  }
   let P = (function load() {
     if (noSave) return defaults();
+    const found = readRawSave();
+    if (!found.raw) return defaults();
     try {
-      const s = JSON.parse(localStorage.getItem(STORE));
-      if (s) {
-        const p = Object.assign(defaults(), s);
-        p.settings = Object.assign(defaults().settings, s.settings || {});
-        p.stars = p.stars || {};
-        // v5 (rare cats): new fields default safely on older saves; nothing else changes
-        p.rares = p.rares || {}; p.rareState = Object.assign({ pity: 0, last: null }, p.rareState || {});
-        p.tipsSeen = p.tipsSeen || {}; p.howtoSeen = !!p.howtoSeen; // v5.1 onboarding: older saves see the intro before board 1
-        p.monetize = MZ.normalize(s.monetize); // v5.3: purchases + ad pacing (older saves: nothing owned, fresh pacing)
-        if ((s.v || 0) < 3) {
-          // v3 retune: boards were re-dealt (old mid-board saves no longer fit) and help got scarce.
-          p.hints = Math.min(p.hints, 1); p.shuffles = Math.min(p.shuffles, 1); p.fish = Math.min(p.fish, HELP_COST);
-          delete p.settings.dim; p.settings.showBlocked = false;
-        }
-        if ((s.v || 0) < PROFILE_VERSION) {
-          // v4 shelf play: boards re-dealt for the tray (mid-board saves dropped). Cleared boards, stars,
-          // album, fish and stock are kept. Sound was opt-in before; it now has music + SFX on by default.
-          p.current = null;
-          p.settings.sound = true; p.settings.music = true;
-          p.v = PROFILE_VERSION;
-          migratedNote = 'New: the cat shelf! Boards were re-dealt for shelf play. Your cleared boards and stars are kept.';
-        }
-        if (p.current && (!p.current.state || p.current.state.v !== 2)) p.current = null; // pre-tray save shape
-        return p;
+      const s = JSON.parse(found.raw);
+      if (!s || typeof s !== 'object') throw new Error('save is not an object');
+      const p = Object.assign(defaults(), s);
+      p.settings = Object.assign(defaults().settings, s.settings || {});
+      p.stars = p.stars || {};
+      // v5 (rare cats): new fields default safely on older saves; nothing else changes
+      p.rares = p.rares || {}; p.rareState = Object.assign({ pity: 0, last: null }, p.rareState || {});
+      p.tipsSeen = p.tipsSeen || {}; p.howtoSeen = !!p.howtoSeen; // v5.1 onboarding: older saves see the intro before board 1
+      p.monetize = MZ.normalize(s.monetize); // v5.3: purchases + ad pacing (older saves: nothing owned, fresh pacing)
+      if ((s.v || 0) < 3) {
+        // v3 retune: boards were re-dealt (old mid-board saves no longer fit) and help got scarce.
+        p.hints = Math.min(p.hints, 1); p.shuffles = Math.min(p.shuffles, 1); p.fish = Math.min(p.fish, HELP_COST);
+        delete p.settings.dim; p.settings.showBlocked = false;
       }
-    } catch (e) { /* ignore */ }
-    return defaults();
+      if ((s.v || 0) < PROFILE_VERSION) {
+        // v4 shelf play: boards re-dealt for the tray (mid-board saves dropped). Cleared boards, stars,
+        // album, fish and stock are kept. Sound was opt-in before; it now has music + SFX on by default.
+        p.current = null;
+        p.settings.sound = true; p.settings.music = true;
+        p.v = PROFILE_VERSION;
+        migratedNote = 'New: the cat shelf! Boards were re-dealt for shelf play. Your cleared boards and stars are kept.';
+      }
+      if (p.current && (!p.current.state || p.current.state.v !== 2)) p.current = null; // pre-tray save shape
+      const before = Object.keys(p.cleared || {}).length;
+      recoverCleared(p);
+      if (found.key !== STORE || Object.keys(p.cleared).length > before) needsPersist = true;
+      return p;
+    } catch (e) {
+      // Keep the raw bytes under a sidecar key and refuse to save over them.
+      loadFailed = true;
+      try { localStorage.setItem(STORE + '.broken', found.raw); } catch (e2) { /* ignore */ }
+      return defaults();
+    }
   })();
-  function save() { if (P.monetize) MZ.touch(P.monetize, Date.now()); if (!noSave) try { localStorage.setItem(STORE, JSON.stringify(P)); } catch (e) { /* ignore */ } }
+  function save() {
+    if (loadFailed) return; // do not replace an unreadable existing save with a fresh blank profile
+    if (P.monetize) MZ.touch(P.monetize, Date.now());
+    if (!noSave) try { localStorage.setItem(STORE, JSON.stringify(P)); } catch (e) { /* ignore */ }
+  }
   // ---- v5.3 monetization (src/monetize.js, data/monetize.json): mock providers on the web, real SDKs natively
   P.monetize = MZ.normalize(P.monetize);
   MZ.startSession(P.monetize, MCFG, Date.now());
@@ -77,7 +113,7 @@
     onAdStart: () => { clockTick(); try { A.stopMusic(true); } catch (e) { /* */ } },
     onAdEnd: () => { clockTick(); try { if (P.settings.music) A.startMusic(); } catch (e) { /* */ } },
   });
-  // ---- v5.4 level locks: board N+1 opens when board N is cleared (derived from P.cleared, see src/progress.js)
+  // ---- v5.5.1 level locks: boards 1–80 always open; 81+ open when the previous board is cleared (src/progress.js)
   const DEV_OK = !!MCFG.testMode || params.has('dev');
   const unlockAll = () => params.has('unlockall') || (DEV_OK && !!P.settings.unlockAll);
   const lockOpts = () => ({ unlockAll: unlockAll(), total: BOARDS.length });
@@ -327,7 +363,7 @@
   }
   /** Home hero: the current chapter's scene, and one big button that continues (resume, else the next board). */
   function homeTarget() {
-    // v5.4: always the furthest board unlocked by progress that isn't cleared yet (resumed if it's the board in progress).
+    // v5.5.1: the first board unlocked by progress that isn't cleared yet (resumed if it's the board in progress).
     // The developer "Unlock all boards" override doesn't move it: it follows real progress.
     const t = PG.playTarget(P.cleared, BOARDS.length);
     if (P.current && !P.current.isDaily && P.current.boardId === t.id) return { id: t.id, resume: true };
@@ -1773,6 +1809,7 @@
   applySettings();
   startAmbience();
   if (migratedNote) { save(); setTimeout(() => toast(migratedNote, 4600), 700); }
+  else if (needsPersist) save();
   const scr = params.get('screen');
   if (params.has('daily')) {
     startBoard('daily', { daily: true, restart: true }); // guarded: locked Daily -> home + toast
